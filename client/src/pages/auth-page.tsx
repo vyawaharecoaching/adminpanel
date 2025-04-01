@@ -98,7 +98,7 @@ export default function AuthPage() {
       <div className="flex flex-col justify-center w-full md:w-1/2 px-4 py-12 sm:px-6 lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-sm">
           <div className="flex justify-center mb-8">
-            <h1 className="text-3xl font-bold text-primary">EduManage</h1>
+            <h1 className="text-3xl font-bold text-primary">Vyawahare Coaching Classes</h1>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
@@ -172,7 +172,7 @@ export default function AuthPage() {
                 <CardHeader>
                   <CardTitle className="text-2xl">Create an account</CardTitle>
                   <CardDescription>
-                    Register to get started with EduManage
+                    Register to get started with Vyawahare Coaching Classes
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -299,7 +299,7 @@ export default function AuthPage() {
 
       <div className="hidden md:flex md:w-1/2 flex-col justify-center bg-primary text-white p-12">
         <div className="max-w-md mx-auto">
-          <h2 className="text-3xl font-bold mb-4">Educational Management System</h2>
+          <h2 className="text-3xl font-bold mb-4">Vyawahare Coaching Classes</h2>
           <p className="text-lg mb-6">
             A comprehensive solution for managing student records, attendance,
             and financial tracking with role-based access control.

@@ -29,7 +29,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -47,7 +46,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -58,7 +56,7 @@ import { Progress } from "@/components/ui/progress";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, FileEdit, Loader2, PlusCircle, Search } from "lucide-react";
+import { CalendarIcon, FileEdit, Loader2, PlusCircle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -76,15 +74,10 @@ type FilterValues = z.infer<typeof filterSchema>;
 const resultSchema = z.object({
   name: z.string().min(1, "Test name is required"),
   classId: z.string().min(1, "Class is required"),
-  studentId: z.string().min(1, "Student is required"),
   date: z.date({
     required_error: "Date is required",
   }),
-  score: z.number().min(0, "Score must be greater than or equal to 0"),
   maxScore: z.number().min(1, "Maximum score must be greater than 0"),
-  status: z.enum(["pending", "graded"], {
-    required_error: "Status is required",
-  }),
 });
 
 type ResultValues = z.infer<typeof resultSchema>;
@@ -98,6 +91,9 @@ const updateResultSchema = z.object({
 });
 
 type UpdateResultValues = z.infer<typeof updateResultSchema>;
+
+// Grade levels
+const grades = ['5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
 
 export default function TestResultsPage() {
   const [currentTab, setCurrentTab] = useState<string>("view");
@@ -120,7 +116,7 @@ export default function TestResultsPage() {
   });
 
   // Get students for dropdown
-  const { data: studentsData } = useQuery({
+  const { data: studentsData, isLoading: studentsLoading } = useQuery({
     queryKey: ["/api/users/student"],
     queryFn: async () => {
       const res = await fetch("/api/users/student");
@@ -171,7 +167,6 @@ export default function TestResultsPage() {
         description: "The test result has been recorded successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/test-results"] });
-      resultForm.reset();
     },
     onError: (error: Error) => {
       toast({
@@ -205,17 +200,14 @@ export default function TestResultsPage() {
     },
   });
 
-  // Form setup for recording test results
+  // Form setup for test details
   const resultForm = useForm<ResultValues>({
     resolver: zodResolver(resultSchema),
     defaultValues: {
       name: "",
       classId: "",
-      studentId: "",
       date: new Date(),
-      score: 0,
       maxScore: 100,
-      status: "pending",
     },
   });
 
@@ -237,28 +229,6 @@ export default function TestResultsPage() {
     },
   });
 
-  const onSubmitResult = (data: ResultValues) => {
-    createResultMutation.mutate({
-      name: data.name,
-      classId: parseInt(data.classId),
-      studentId: parseInt(data.studentId),
-      date: data.date,
-      score: data.score,
-      maxScore: data.maxScore,
-      status: data.status,
-    });
-  };
-
-  const onSubmitUpdateResult = (data: UpdateResultValues) => {
-    if (!selectedResult) return;
-    
-    updateResultMutation.mutate({
-      id: selectedResult.id,
-      score: data.score,
-      status: data.status,
-    });
-  };
-
   const onSubmitFilter = (data: FilterValues) => {
     setSelectedClass(data.classId || "");
     setSelectedStudent(data.studentId || "");
@@ -272,6 +242,16 @@ export default function TestResultsPage() {
       status: result.status as "pending" | "graded",
     });
     setIsUpdateDialogOpen(true);
+  };
+
+  const onSubmitUpdateResult = (data: UpdateResultValues) => {
+    if (!selectedResult) return;
+    
+    updateResultMutation.mutate({
+      id: selectedResult.id,
+      score: data.score,
+      status: data.status,
+    });
   };
 
   // Format date for display
@@ -340,9 +320,9 @@ export default function TestResultsPage() {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="">All Classes</SelectItem>
-                            {classesData?.map((cls: any) => (
-                              <SelectItem key={cls.id} value={cls.id.toString()}>
-                                {cls.name}
+                            {grades.map((grade) => (
+                              <SelectItem key={grade} value={grade}>
+                                {grade}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -416,7 +396,10 @@ export default function TestResultsPage() {
                             <TableRow key={result.id}>
                               <TableCell>{result.name}</TableCell>
                               <TableCell>{result.classId}</TableCell>
-                              <TableCell>{result.studentId}</TableCell>
+                              <TableCell>
+                                {studentsData?.find((s: any) => s.id === result.studentId)?.fullName || 
+                                 `Student ${result.studentId}`}
+                              </TableCell>
                               <TableCell>{formatDate(result.date)}</TableCell>
                               <TableCell>
                                 <div className="flex items-center">
@@ -426,7 +409,6 @@ export default function TestResultsPage() {
                                   <Progress 
                                     className="w-16 h-2" 
                                     value={percentage}
-                                    indicatorColor={getScoreColor(percentage)}
                                   />
                                 </div>
                               </TableCell>
@@ -472,202 +454,239 @@ export default function TestResultsPage() {
               <CardHeader>
                 <CardTitle>Add Test Results</CardTitle>
                 <CardDescription>
-                  Record new test results for students
+                  Record test results for students by class
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Form {...resultForm}>
-                  <form onSubmit={resultForm.handleSubmit(onSubmitResult)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={resultForm.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Test Name</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g., Midterm Exam" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={resultForm.control}
-                        name="classId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Class</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a class" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {classesData?.map((cls: any) => (
-                                  <SelectItem key={cls.id} value={cls.id.toString()}>
-                                    {cls.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={resultForm.control}
-                        name="studentId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Student</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a student" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {studentsData?.map((student: any) => (
-                                  <SelectItem key={student.id} value={student.id.toString()}>
-                                    {student.fullName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={resultForm.control}
-                        name="date"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Test Date</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                      "pl-3 text-left font-normal",
-                                      !field.value && "text-muted-foreground"
-                                    )}
-                                  >
-                                    {field.value ? (
-                                      format(field.value, "PPP")
-                                    ) : (
-                                      <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={resultForm.control}
-                        name="score"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Score</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                min="0" 
-                                step="0.5" 
-                                {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))} 
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={resultForm.control}
-                        name="maxScore"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Maximum Score</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="number" 
-                                min="1" 
-                                step="1" 
-                                {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))} 
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={resultForm.control}
-                        name="status"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Status</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="graded">Graded</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <FormLabel>Test Name</FormLabel>
+                      <Input 
+                        placeholder="e.g., Midterm Exam" 
+                        value={resultForm.watch('name')}
+                        onChange={(e) => resultForm.setValue('name', e.target.value)}
+                        className="mt-1"
                       />
                     </div>
                     
-                    <Button 
-                      type="submit" 
-                      className="w-full md:w-auto"
-                      disabled={createResultMutation.isPending}
-                    >
-                      {createResultMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <div>
+                      <FormLabel>Class</FormLabel>
+                      <Select 
+                        onValueChange={(value) => {
+                          setSelectedClass(value);
+                          resultForm.setValue('classId', value);
+                        }}
+                        value={selectedClass}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {grades.map((grade) => (
+                            <SelectItem key={grade} value={grade}>
+                              {grade}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <FormLabel>Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full mt-1 pl-3 text-left font-normal",
+                              !resultForm.watch('date') && "text-muted-foreground"
+                            )}
+                          >
+                            {resultForm.watch('date') ? (
+                              format(resultForm.watch('date'), "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={resultForm.watch('date')}
+                            onSelect={(date) => resultForm.setValue('date', date as Date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    
+                    <div>
+                      <FormLabel>Maximum Score</FormLabel>
+                      <Input 
+                        type="number" 
+                        value={resultForm.watch('maxScore')}
+                        onChange={(e) => resultForm.setValue('maxScore', Number(e.target.value))}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  {selectedClass && resultForm.watch('name') && resultForm.watch('date') && (
+                    <div className="mt-8">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">
+                          Student Scores for {resultForm.watch('name')}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {format(resultForm.watch('date'), "PPP")}
+                        </p>
+                      </div>
+                      
+                      {studentsLoading ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                      ) : studentsData && studentsData.length > 0 ? (
+                        <div className="rounded-md border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Student</TableHead>
+                                <TableHead>Score</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="w-20">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {studentsData.map((student: any) => {
+                                // Find if there's an existing result for this student for this test
+                                const existingResult = resultsData?.find(
+                                  (r) => r.studentId === student.id && 
+                                        r.classId === parseInt(selectedClass) &&
+                                        r.name === resultForm.watch('name') &&
+                                        format(new Date(r.date), "yyyy-MM-dd") === format(resultForm.watch('date'), "yyyy-MM-dd")
+                                );
+                                
+                                return (
+                                  <TableRow key={student.id}>
+                                    <TableCell className="font-medium">
+                                      <div className="flex items-center">
+                                        <div className="w-8 h-8 rounded-full bg-primary/10 mr-2 flex items-center justify-center text-primary">
+                                          {student.fullName?.charAt(0) || 'S'}
+                                        </div>
+                                        <div>
+                                          <p>{student.fullName}</p>
+                                          <p className="text-xs text-gray-500">ID: {student.id}</p>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center space-x-2">
+                                        <Input 
+                                          type="number" 
+                                          className="w-16" 
+                                          placeholder="0"
+                                          value={existingResult?.score || ''}
+                                          onChange={(e) => {
+                                            const score = Number(e.target.value);
+                                            // If already has result, update it
+                                            if (existingResult) {
+                                              updateResultMutation.mutate({
+                                                id: existingResult.id,
+                                                score: score,
+                                                status: existingResult.status
+                                              });
+                                            } else {
+                                              // Otherwise create new result
+                                              createResultMutation.mutate({
+                                                name: resultForm.watch('name'),
+                                                classId: parseInt(selectedClass),
+                                                studentId: student.id,
+                                                date: resultForm.watch('date') as unknown as string,
+                                                score: score,
+                                                maxScore: resultForm.watch('maxScore'),
+                                                status: 'pending'
+                                              });
+                                            }
+                                          }} 
+                                        />
+                                        <span className="text-gray-500">/ {resultForm.watch('maxScore')}</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Select 
+                                        defaultValue={existingResult?.status || "pending"}
+                                        onValueChange={(value) => {
+                                          if (existingResult) {
+                                            updateResultMutation.mutate({
+                                              id: existingResult.id,
+                                              score: existingResult.score,
+                                              status: value
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger className="w-28">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="graded">Graded</SelectItem>
+                                          <SelectItem value="pending">Pending</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell>
+                                      {existingResult ? (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          className="text-primary"
+                                          onClick={() => openUpdateDialog(existingResult)}
+                                        >
+                                          <FileEdit className="h-4 w-4 mr-1" />
+                                          Edit
+                                        </Button>
+                                      ) : (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm"
+                                          className="text-primary"
+                                          onClick={() => {
+                                            createResultMutation.mutate({
+                                              name: resultForm.watch('name'),
+                                              classId: parseInt(selectedClass),
+                                              studentId: student.id,
+                                              date: resultForm.watch('date') as unknown as string,
+                                              score: 0,
+                                              maxScore: resultForm.watch('maxScore'),
+                                              status: 'pending'
+                                            });
+                                          }}
+                                        >
+                                          <PlusCircle className="h-4 w-4 mr-1" />
+                                          Add
+                                        </Button>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
                       ) : (
-                        <PlusCircle className="mr-2 h-4 w-4" />
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border">
+                          <p className="text-gray-500 font-medium">No students found in this class.</p>
+                          <p className="text-gray-400 text-sm mt-2">Please add students to this class first.</p>
+                        </div>
                       )}
-                      Add Test Result
-                    </Button>
-                  </form>
-                </Form>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -708,15 +727,10 @@ export default function TestResultsPage() {
                         <FormControl>
                           <Input 
                             type="number" 
-                            min="0" 
-                            step="0.5" 
                             {...field}
-                            onChange={(e) => field.onChange(parseFloat(e.target.value))} 
+                            onChange={e => field.onChange(Number(e.target.value))}
                           />
                         </FormControl>
-                        <FormDescription>
-                          Out of {selectedResult.maxScore} points
-                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -738,8 +752,8 @@ export default function TestResultsPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
                             <SelectItem value="graded">Graded</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -750,20 +764,13 @@ export default function TestResultsPage() {
                 
                 <DialogFooter>
                   <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsUpdateDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit"
+                    type="submit" 
                     disabled={updateResultMutation.isPending}
                   >
-                    {updateResultMutation.isPending && (
+                    {updateResultMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Save Changes
+                    ) : null}
+                    Update Result
                   </Button>
                 </DialogFooter>
               </form>

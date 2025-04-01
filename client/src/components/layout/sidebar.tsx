@@ -72,7 +72,7 @@ export const Sidebar = ({ isOpen, setIsOpen }: SidebarProps) => {
       )}
     >
       <div className="flex items-center justify-center h-16 border-b">
-        <h1 className="text-xl font-semibold text-primary">EduManage</h1>
+        <h1 className="text-xl font-semibold text-primary">Vyawahare Coaching Classes</h1>
       </div>
 
       <div className="px-2 py-4">

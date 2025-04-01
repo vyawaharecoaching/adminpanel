@@ -13,6 +13,9 @@ import {
 import { connectToDatabase } from "./db/connection";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Force using MongoDB for the database connection
+  process.env.USE_MONGODB = 'true';
+  
   // Connect to MongoDB database
   try {
     await connectToDatabase();

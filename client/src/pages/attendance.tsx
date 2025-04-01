@@ -1,37 +1,11 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Attendance, InsertAttendance } from "@shared/schema";
 import { PageContainer } from "@/components/layout/page-container";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -48,7 +22,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -57,11 +30,18 @@ import {
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, Check, Loader2, PlusCircle, Search, X } from "lucide-react";
-import { format, isToday, parseISO } from "date-fns";
+import { CalendarIcon, Loader2, PlusCircle } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 // Schema for attendance filtering
 const filterSchema = z.object({
@@ -85,23 +65,6 @@ const attendanceSchema = z.object({
 
 type AttendanceValues = z.infer<typeof attendanceSchema>;
 
-// Schema for bulk attendance
-const bulkAttendanceSchema = z.object({
-  classId: z.string().min(1, "Class is required"),
-  date: z.date({
-    required_error: "Date is required",
-  }),
-  studentStatuses: z.array(
-    z.object({
-      studentId: z.number(),
-      studentName: z.string(),
-      status: z.enum(["present", "absent", "late"]),
-    })
-  ),
-});
-
-type BulkAttendanceValues = z.infer<typeof bulkAttendanceSchema>;
-
 export default function AttendancePage() {
   const [currentTab, setCurrentTab] = useState<string>("view");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
@@ -119,7 +82,7 @@ export default function AttendancePage() {
     },
   });
 
-  // Get students for bulk attendance
+  // Get students for dropdown
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
     queryKey: ["/api/users/student"],
     queryFn: async () => {
@@ -204,38 +167,6 @@ export default function AttendancePage() {
     },
   });
 
-  // Bulk attendance mutation
-  const bulkAttendanceMutation = useMutation({
-    mutationFn: async (data: BulkAttendanceValues) => {
-      // Convert to multiple attendance records
-      const promises = data.studentStatuses.map(student => {
-        return apiRequest("POST", "/api/attendance", {
-          classId: parseInt(data.classId),
-          studentId: student.studentId,
-          date: data.date,
-          status: student.status,
-        });
-      });
-      
-      return await Promise.all(promises);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Bulk attendance recorded",
-        description: "Attendance for all students has been recorded successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
-      bulkAttendanceForm.reset();
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to record bulk attendance",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   // Form setup for attendance
   const attendanceForm = useForm<AttendanceValues>({
     resolver: zodResolver(attendanceSchema),
@@ -244,16 +175,6 @@ export default function AttendancePage() {
       studentId: "",
       date: new Date(),
       status: "present",
-    },
-  });
-
-  // Form setup for bulk attendance
-  const bulkAttendanceForm = useForm<BulkAttendanceValues>({
-    resolver: zodResolver(bulkAttendanceSchema),
-    defaultValues: {
-      classId: "",
-      date: new Date(),
-      studentStatuses: [],
     },
   });
 
@@ -266,32 +187,13 @@ export default function AttendancePage() {
     },
   });
 
-  // Update the student statuses array when classId changes in bulk form
-  const watchBulkClassId = bulkAttendanceForm.watch("classId");
-
-  // Update studentStatuses when class or students data changes
-  React.useEffect(() => {
-    if (watchBulkClassId && studentsData) {
-      // Reset studentStatuses with default values when class changes
-      bulkAttendanceForm.setValue("studentStatuses", studentsData.map(student => ({
-        studentId: student.id,
-        studentName: student.fullName,
-        status: "present",
-      })));
-    }
-  }, [watchBulkClassId, studentsData, bulkAttendanceForm]);
-
   const onSubmitAttendance = (data: AttendanceValues) => {
     recordAttendanceMutation.mutate({
       classId: parseInt(data.classId),
       studentId: parseInt(data.studentId),
-      date: data.date,
+      date: data.date as unknown as string, // TypeScript workaround
       status: data.status,
     });
-  };
-
-  const onSubmitBulkAttendance = (data: BulkAttendanceValues) => {
-    bulkAttendanceMutation.mutate(data);
   };
 
   const onSubmitFilter = (data: FilterValues) => {
@@ -310,36 +212,22 @@ export default function AttendancePage() {
     return format(parsedDate, 'PPP');
   };
 
-  // Get status badge color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "present":
-        return "bg-green-100 text-green-800";
-      case "absent":
-        return "bg-red-100 text-red-800";
-      case "late":
-        return "bg-amber-100 text-amber-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
   // Check if user can edit attendance (admin or teacher)
   const canEditAttendance = user?.role === "admin" || user?.role === "teacher";
+
+  // Class grades for filtering
+  const grades = ['5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
 
   return (
     <PageContainer
       title="Attendance Management"
-      subtitle="Track and manage student attendance records"
+      subtitle="Track and manage daily attendance for classes 5th to 12th"
     >
       <Tabs defaultValue="view" value={currentTab} onValueChange={setCurrentTab}>
-        <TabsList className="grid w-full grid-cols-3 mb-6">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
           <TabsTrigger value="view">View Attendance</TabsTrigger>
           {canEditAttendance && (
-            <>
-              <TabsTrigger value="record">Record Attendance</TabsTrigger>
-              <TabsTrigger value="bulk">Bulk Attendance</TabsTrigger>
-            </>
+            <TabsTrigger value="record">Record Attendance</TabsTrigger>
           )}
         </TabsList>
 
@@ -356,157 +244,150 @@ export default function AttendancePage() {
               <Form {...filterForm}>
                 <form 
                   onSubmit={filterForm.handleSubmit(onSubmitFilter)} 
-                  className="flex flex-col sm:flex-row gap-4 mb-6"
+                  className="flex flex-col gap-6 mb-6"
                 >
-                  <FormField
-                    control={filterForm.control}
-                    name="classId"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel>Class</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a class" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="">All Classes</SelectItem>
-                            {classesData?.map((cls: any) => (
-                              <SelectItem key={cls.id} value={cls.id.toString()}>
-                                {cls.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={filterForm.control}
-                    name="date"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel>Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(field.value, "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              initialFocus
+                  <div className="w-full">
+                    <p className="mb-2 font-medium text-lg">Select Class:</p>
+                    <div className="bg-purple-100 p-4 rounded-md">
+                      <div className="grid grid-cols-4 gap-3">
+                        {grades.map((grade) => (
+                          <div key={grade} className="flex items-center space-x-2">
+                            <input 
+                              type="radio" 
+                              id={`grade-${grade}`} 
+                              name="grade" 
+                              className="h-4 w-4 text-purple-600"
+                              onChange={() => filterForm.setValue('classId', grade)}
+                              checked={filterForm.watch('classId') === grade}
                             />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                            <label htmlFor={`grade-${grade}`} className="text-sm font-medium">{grade}</label>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="mt-4">
+                        <FormField
+                          control={filterForm.control}
+                          name="date"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-purple-900 font-medium">Date</FormLabel>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant={"outline"}
+                                      className={cn(
+                                        "w-full pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                      )}
+                                    >
+                                      {field.value ? (
+                                        format(field.value, "PPP")
+                                      ) : (
+                                        <span>Pick a date</span>
+                                      )}
+                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                  <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
 
-                  <Button 
-                    type="submit" 
-                    className="mt-8"
-                  >
-                    Filter Records
-                  </Button>
+                      <Button 
+                        type="submit"
+                        className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        Apply Filters
+                      </Button>
+                    </div>
+                  </div>
                 </form>
               </Form>
 
               {attendanceLoading ? (
                 <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
                 </div>
               ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Class</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        {canEditAttendance && <TableHead>Actions</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {attendanceData?.length > 0 ? (
-                        attendanceData.map((record) => (
-                          <TableRow key={record.id}>
-                            <TableCell>{record.studentId}</TableCell>
-                            <TableCell>{record.classId}</TableCell>
-                            <TableCell>{formatDate(record.date)}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(record.status)}`}>
-                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                              </span>
-                            </TableCell>
-                            {canEditAttendance && (
-                              <TableCell>
-                                <div className="flex space-x-2">
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => handleStatusChange(record.id, "present")}
-                                    disabled={record.status === "present"}
-                                  >
-                                    <Check className="h-4 w-4 mr-1 text-green-600" />
-                                    Present
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => handleStatusChange(record.id, "absent")}
-                                    disabled={record.status === "absent"}
-                                  >
-                                    <X className="h-4 w-4 mr-1 text-red-600" />
-                                    Absent
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => handleStatusChange(record.id, "late")}
-                                    disabled={record.status === "late"}
-                                  >
-                                    <CalendarIcon className="h-4 w-4 mr-1 text-amber-500" />
-                                    Late
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={canEditAttendance ? 5 : 4} className="text-center py-6 text-gray-500">
-                            No attendance records found for the selected filters.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-4">
+                  {attendanceData && attendanceData.length > 0 ? (
+                    attendanceData.map((record) => (
+                      <div key={record.id} className="bg-purple-700 rounded-lg overflow-hidden shadow-md">
+                        <div className="p-4 text-white flex items-start">
+                          <div className="w-16 h-16 bg-purple-900 rounded-lg overflow-hidden mr-4 flex-shrink-0">
+                            <img 
+                              src={`https://i.pravatar.cc/150?u=${record.studentId}`} 
+                              alt="Student" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <div className="mb-1">
+                              <p className="font-medium text-lg">Name: {studentsData?.find((s: any) => s.id === record.studentId)?.fullName || `Student ${record.studentId}`}</p>
+                              <p className="text-sm">Roll No: {record.studentId}</p>
+                              <p className="text-sm">Class: {record.classId}</p>
+                            </div>
+                            
+                            <div className="flex space-x-8 mt-3">
+                              <div className="flex items-center">
+                                <input 
+                                  type="radio" 
+                                  id={`present-${record.id}`} 
+                                  name={`attendance-${record.id}`} 
+                                  checked={record.status === "present"}
+                                  onChange={() => handleStatusChange(record.id, "present")}
+                                  className="h-4 w-4 mr-2"
+                                />
+                                <label htmlFor={`present-${record.id}`} className="text-sm">Present</label>
+                              </div>
+                              <div className="flex items-center">
+                                <input 
+                                  type="radio" 
+                                  id={`absent-${record.id}`} 
+                                  name={`attendance-${record.id}`} 
+                                  checked={record.status === "absent"}
+                                  onChange={() => handleStatusChange(record.id, "absent")}
+                                  className="h-4 w-4 mr-2"
+                                />
+                                <label htmlFor={`absent-${record.id}`} className="text-sm">Absent</label>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-purple-800 py-2 px-4 flex justify-end">
+                          <Button 
+                            variant="secondary" 
+                            size="sm"
+                            className="bg-purple-500 hover:bg-purple-600 text-white"
+                            onClick={() => toast({
+                              title: "Attendance saved",
+                              description: "Student attendance has been updated."
+                            })}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 bg-purple-50 rounded-lg border border-purple-200">
+                      <p className="text-purple-800 font-medium">No attendance records found for the selected filters.</p>
+                      <p className="text-purple-600 text-sm mt-2">Try selecting a different class or date.</p>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -517,292 +398,210 @@ export default function AttendancePage() {
         {canEditAttendance && (
           <TabsContent value="record">
             <Card>
-              <CardHeader>
-                <CardTitle>Record Attendance</CardTitle>
+              <CardHeader className="bg-purple-50">
+                <CardTitle className="text-purple-900">Record Attendance</CardTitle>
                 <CardDescription>
-                  Record attendance for individual students
+                  Record attendance for students by class
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Form {...attendanceForm}>
-                  <form onSubmit={attendanceForm.handleSubmit(onSubmitAttendance)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={attendanceForm.control}
-                        name="classId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Class</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a class" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {classesData?.map((cls: any) => (
-                                  <SelectItem key={cls.id} value={cls.id.toString()}>
-                                    {cls.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={attendanceForm.control}
-                        name="studentId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Student</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a student" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {studentsData?.map((student: any) => (
-                                  <SelectItem key={student.id} value={student.id.toString()}>
-                                    {student.fullName}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={attendanceForm.control}
-                        name="date"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Date</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                      "pl-3 text-left font-normal",
-                                      !field.value && "text-muted-foreground"
-                                    )}
-                                  >
-                                    {field.value ? (
-                                      format(field.value, "PPP")
-                                    ) : (
-                                      <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={attendanceForm.control}
-                        name="status"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Status</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="present">Present</SelectItem>
-                                <SelectItem value="absent">Absent</SelectItem>
-                                <SelectItem value="late">Late</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="text-sm font-medium">Class</label>
+                      <Select 
+                        onValueChange={(value) => setSelectedClass(value)}
+                        value={selectedClass}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select a class" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {grades.map((grade) => (
+                            <SelectItem key={grade} value={grade}>
+                              {grade}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
-                    <Button 
-                      type="submit" 
-                      className="w-full md:w-auto"
-                      disabled={recordAttendanceMutation.isPending}
-                    >
-                      {recordAttendanceMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                      )}
-                      Record Attendance
-                    </Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-
-        {/* Bulk Attendance Tab */}
-        {canEditAttendance && (
-          <TabsContent value="bulk">
-            <Card>
-              <CardHeader>
-                <CardTitle>Bulk Attendance</CardTitle>
-                <CardDescription>
-                  Record attendance for an entire class at once
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Form {...bulkAttendanceForm}>
-                  <form onSubmit={bulkAttendanceForm.handleSubmit(onSubmitBulkAttendance)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={bulkAttendanceForm.control}
-                        name="classId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Class</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a class" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {classesData?.map((cls: any) => (
-                                  <SelectItem key={cls.id} value={cls.id.toString()}>
-                                    {cls.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={bulkAttendanceForm.control}
-                        name="date"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Date</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                      "pl-3 text-left font-normal",
-                                      !field.value && "text-muted-foreground"
-                                    )}
-                                  >
-                                    {field.value ? (
-                                      format(field.value, "PPP")
-                                    ) : (
-                                      <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <div>
+                      <label className="text-sm font-medium">Date</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full mt-1 pl-3 text-left font-normal",
+                              !selectedDate && "text-muted-foreground"
+                            )}
+                          >
+                            {selectedDate ? (
+                              format(selectedDate, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={setSelectedDate}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
-                    
-                    {watchBulkClassId && (
-                      <div className="rounded-md border mt-4">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Student Name</TableHead>
-                              <TableHead>Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {bulkAttendanceForm.getValues().studentStatuses?.map((student, index) => (
-                              <TableRow key={student.studentId}>
-                                <TableCell>{student.studentName}</TableCell>
-                                <TableCell>
-                                  <Select 
-                                    value={student.status}
-                                    onValueChange={(value) => {
-                                      const currentStudentStatuses = [...bulkAttendanceForm.getValues().studentStatuses];
-                                      currentStudentStatuses[index].status = value as "present" | "absent" | "late";
-                                      bulkAttendanceForm.setValue("studentStatuses", currentStudentStatuses);
-                                    }}
-                                  >
-                                    <SelectTrigger className="w-[130px]">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="present">Present</SelectItem>
-                                      <SelectItem value="absent">Absent</SelectItem>
-                                      <SelectItem value="late">Late</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full md:w-auto"
-                      disabled={bulkAttendanceMutation.isPending || !watchBulkClassId}
-                    >
-                      {bulkAttendanceMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  </div>
+                  
+                  {selectedClass && selectedDate && (
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold mb-4">Class {selectedClass} Attendance for {format(selectedDate, "PPP")}</h3>
+                      
+                      {studentsLoading ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                        </div>
+                      ) : studentsData && studentsData.length > 0 ? (
+                        <div className="space-y-4 mt-4">
+                          {studentsData.map((student: any) => (
+                            <div key={student.id} className="bg-purple-700 rounded-lg overflow-hidden shadow-md">
+                              <div className="p-4 text-white flex items-start">
+                                <div className="w-16 h-16 bg-purple-900 rounded-lg overflow-hidden mr-4 flex-shrink-0">
+                                  <img 
+                                    src={`https://i.pravatar.cc/150?u=${student.id}`} 
+                                    alt="Student" 
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <div className="mb-1">
+                                    <p className="font-medium text-lg">{student.fullName}</p>
+                                    <p className="text-sm">Roll No: {student.id}</p>
+                                    <p className="text-sm">Class: {selectedClass}</p>
+                                  </div>
+                                  
+                                  <div className="flex space-x-8 mt-3">
+                                    <div className="flex items-center">
+                                      <input 
+                                        type="radio" 
+                                        id={`present-${student.id}`} 
+                                        name={`attendance-${student.id}`} 
+                                        className="h-4 w-4 mr-2"
+                                        checked={
+                                          attendanceData?.find(a => 
+                                            a.studentId === student.id && 
+                                            a.classId === parseInt(selectedClass) && 
+                                            format(new Date(a.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd")
+                                          )?.status === "present"
+                                        }
+                                        onChange={() => {
+                                          const existingRecord = attendanceData?.find(a => 
+                                            a.studentId === student.id && 
+                                            a.classId === parseInt(selectedClass) && 
+                                            format(new Date(a.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd")
+                                          );
+                                          
+                                          if (existingRecord) {
+                                            handleStatusChange(existingRecord.id, "present");
+                                          } else {
+                                            recordAttendanceMutation.mutate({
+                                              studentId: student.id,
+                                              classId: parseInt(selectedClass),
+                                              date: selectedDate as unknown as string,
+                                              status: "present"
+                                            });
+                                          }
+                                        }}
+                                      />
+                                      <label htmlFor={`present-${student.id}`} className="text-sm">Present</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                      <input 
+                                        type="radio" 
+                                        id={`absent-${student.id}`} 
+                                        name={`attendance-${student.id}`}
+                                        className="h-4 w-4 mr-2" 
+                                        checked={
+                                          attendanceData?.find(a => 
+                                            a.studentId === student.id && 
+                                            a.classId === parseInt(selectedClass) && 
+                                            format(new Date(a.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd")
+                                          )?.status === "absent"
+                                        }
+                                        onChange={() => {
+                                          const existingRecord = attendanceData?.find(a => 
+                                            a.studentId === student.id && 
+                                            a.classId === parseInt(selectedClass) && 
+                                            format(new Date(a.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd")
+                                          );
+                                          
+                                          if (existingRecord) {
+                                            handleStatusChange(existingRecord.id, "absent");
+                                          } else {
+                                            recordAttendanceMutation.mutate({
+                                              studentId: student.id,
+                                              classId: parseInt(selectedClass),
+                                              date: selectedDate as unknown as string,
+                                              status: "absent"
+                                            });
+                                          }
+                                        }}
+                                      />
+                                      <label htmlFor={`absent-${student.id}`} className="text-sm">Absent</label>
+                                    </div>
+                                    <div className="flex items-center">
+                                      <input 
+                                        type="radio" 
+                                        id={`late-${student.id}`} 
+                                        name={`attendance-${student.id}`}
+                                        className="h-4 w-4 mr-2" 
+                                        checked={
+                                          attendanceData?.find(a => 
+                                            a.studentId === student.id && 
+                                            a.classId === parseInt(selectedClass) && 
+                                            format(new Date(a.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd")
+                                          )?.status === "late"
+                                        }
+                                        onChange={() => {
+                                          const existingRecord = attendanceData?.find(a => 
+                                            a.studentId === student.id && 
+                                            a.classId === parseInt(selectedClass) && 
+                                            format(new Date(a.date), "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd")
+                                          );
+                                          
+                                          if (existingRecord) {
+                                            handleStatusChange(existingRecord.id, "late");
+                                          } else {
+                                            recordAttendanceMutation.mutate({
+                                              studentId: student.id,
+                                              classId: parseInt(selectedClass),
+                                              date: selectedDate as unknown as string,
+                                              status: "late"
+                                            });
+                                          }
+                                        }}
+                                      />
+                                      <label htmlFor={`late-${student.id}`} className="text-sm">Late</label>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
-                        <PlusCircle className="mr-2 h-4 w-4" />
+                        <div className="text-center py-8 bg-purple-50 rounded-lg border border-purple-200">
+                          <p className="text-purple-800 font-medium">No students found in this class.</p>
+                          <p className="text-purple-600 text-sm mt-2">Please add students to this class first.</p>
+                        </div>
                       )}
-                      Submit Bulk Attendance
-                    </Button>
-                  </form>
-                </Form>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

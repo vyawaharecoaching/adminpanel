@@ -193,14 +193,14 @@ export default function StudentRegistrationPage() {
   
   return (
     <PageContainer
-      title="Student Registration Form"
-      subtitle="Complete the form below to register as a student"
+      title="Vyawahare Coaching Classes - Student Registration"
+      subtitle="Complete the form below to register as a student (Classes 5th to 12th)"
     >
       <Card className="mb-8">
         <CardHeader className="text-center bg-primary text-white rounded-t-lg">
-          <CardTitle className="text-2xl">Registration Form</CardTitle>
+          <CardTitle className="text-2xl">Vyawahare Coaching Classes</CardTitle>
           <CardDescription className="text-white opacity-90">
-            Fill in all details accurately
+            Student Registration Form - Fill in all details accurately
           </CardDescription>
         </CardHeader>
         
