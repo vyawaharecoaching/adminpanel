@@ -1,11 +1,11 @@
 import { useAuth } from "@/hooks/use-auth";
 import { PageContainer } from "@/components/layout/page-container";
-import StatCard from "@/components/dashboard/stat-card";
-import AttendanceTable from "@/components/dashboard/attendance-table";
-import TestResultsTable from "@/components/dashboard/test-results-table";
-import PaymentStatus from "@/components/dashboard/payment-status";
-import RecentStudents from "@/components/dashboard/recent-students";
-import UpcomingEvents from "@/components/dashboard/upcoming-events";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { AttendanceTable } from "@/components/dashboard/attendance-table";
+import { TestResultsTable } from "@/components/dashboard/test-results-table";
+import { PaymentStatus } from "@/components/dashboard/payment-status";
+import { RecentStudents } from "@/components/dashboard/recent-students";
+import { UpcomingEvents } from "@/components/dashboard/upcoming-events";
 import { 
   Users, CalendarCheck, CheckCircle, Banknote
 } from "lucide-react";

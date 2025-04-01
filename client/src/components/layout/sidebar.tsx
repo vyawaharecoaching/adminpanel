@@ -16,16 +16,14 @@ interface NavItemProps {
 
 const NavItem = ({ href, icon, label, active }: NavItemProps) => {
   return (
-    <Link href={href}>
-      <a className={cn(
-        "flex items-center px-4 py-3 my-1 rounded cursor-pointer transition-colors",
-        active 
-          ? "bg-primary bg-opacity-12 text-primary border-l-3 border-primary" 
-          : "hover:bg-gray-100"
-      )}>
-        <div className="mr-3">{icon}</div>
-        <span>{label}</span>
-      </a>
+    <Link href={href} className={cn(
+      "flex items-center px-4 py-3 my-1 rounded cursor-pointer transition-colors",
+      active 
+        ? "bg-primary/10 text-primary border-l-2 border-primary" 
+        : "hover:bg-gray-100"
+    )}>
+      <div className="mr-3">{icon}</div>
+      <span>{label}</span>
     </Link>
   );
 };

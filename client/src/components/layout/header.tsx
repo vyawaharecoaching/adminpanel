@@ -91,8 +91,8 @@ export const Header = ({ toggleSidebar }: HeaderProps) => {
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/account-settings">
-                  <a className="w-full cursor-pointer">Account Settings</a>
+                <Link href="/account-settings" className="w-full cursor-pointer">
+                  Account Settings
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

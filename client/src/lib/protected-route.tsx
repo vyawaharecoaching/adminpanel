@@ -7,13 +7,15 @@ export function ProtectedRoute({
   component: Component,
 }: {
   path: string;
-  component: React.FC<Record<string, unknown>>;
+  component: React.ComponentType<any>;
 }) {
-  const { user, isLoading } = useAuth();
-
   return (
     <Route path={path}>
-      {() => {
+      {(params) => {
+        // Using the auth context inside the render function to ensure it's used
+        // within the AuthProvider
+        const { user, isLoading } = useAuth();
+        
         if (isLoading) {
           return (
             <div className="flex items-center justify-center min-h-screen">
@@ -26,7 +28,7 @@ export function ProtectedRoute({
           return <Redirect to="/auth" />;
         }
 
-        return <Component />;
+        return <Component params={params} />;
       }}
     </Route>
   );
