@@ -237,6 +237,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
+      // Allow both admin and teacher roles to view installments
+      if (req.user?.role !== "admin" && req.user?.role !== "teacher") {
+        return res.status(403).json({ message: "Forbidden: Access denied" });
+      }
+      
       const studentId = req.query.studentId ? parseInt(req.query.studentId as string, 10) : undefined;
       const status = req.query.status as string;
       
@@ -323,6 +328,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertEventSchema.parse(req.body);
       const event = await storage.createEvent(validatedData);
       res.status(201).json(event);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Student Registration route
+  app.post("/api/student-registration", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Only allow admin and teacher roles to register students
+      if (req.user?.role !== "admin" && req.user?.role !== "teacher") {
+        return res.status(403).json({ message: "Forbidden: Access denied" });
+      }
+      
+      // In a production app, here we would:
+      // 1. Handle file upload (for the passport photo)
+      // 2. Validate the form data
+      // 3. Save the data to the database
+      
+      // For now, we'll just return a success response
+      res.status(201).json({ 
+        message: "Student registration submitted successfully",
+        data: req.body
+      });
     } catch (error) {
       next(error);
     }

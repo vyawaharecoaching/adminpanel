@@ -17,7 +17,6 @@ export default function Dashboard() {
   
   const isAdmin = user.role === "admin";
   const isTeacher = user.role === "teacher";
-  const isStudent = user.role === "student";
   
   const roleSpecificTitle = () => {
     switch (user.role) {
@@ -25,8 +24,6 @@ export default function Dashboard() {
         return "Admin Dashboard";
       case "teacher":
         return "Teacher Dashboard";
-      case "student":
-        return "Student Dashboard";
       default:
         return "Dashboard";
     }
@@ -65,7 +62,7 @@ export default function Dashboard() {
           color="accent"
         />
         
-        {(isAdmin || isStudent) && (
+        {(isAdmin || isTeacher) && (
           <StatCard
             title="Payment Rate"
             value="87%"
@@ -86,8 +83,11 @@ export default function Dashboard() {
 
         {/* Right Column (1/3 width on large screens) */}
         <div className="space-y-6">
-          {(isAdmin || isStudent) && <PaymentStatus />}
+          {/* Display payment status for admins and teachers */}
+          {(isAdmin || isTeacher) && <PaymentStatus />}
+          {/* Only admins can see recent students */}
           {isAdmin && <RecentStudents />}
+          {/* Everyone can see upcoming events */}
           <UpcomingEvents />
         </div>
       </div>

@@ -430,7 +430,7 @@ export default function InstallmentsPage() {
                                     Edit
                                   </Button>
                                 )}
-                                {(isAdmin || user?.role === "student") && 
+                                {(isAdmin || user?.role === "teacher") && 
                                   installment.status !== "paid" && (
                                   <Button 
                                     variant="outline" 
