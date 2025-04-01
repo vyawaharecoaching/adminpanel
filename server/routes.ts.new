@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -11,136 +11,76 @@ import {
   insertEventSchema,
   insertTeacherPaymentSchema
 } from "@shared/schema";
-import { initSupabase } from "./db/supabase";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 
-import { initSupabaseTables, checkSupabaseTables, addSampleDataToSupabase } from "./db/init-supabase";
-
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Force using in-memory storage for development
+  // Set up in-memory storage for development
   process.env.USE_SUPABASE = 'false';
   console.log('[storage] Using in-memory storage for development');
   
-  // Initialize in-memory sample data
-  const tablesExist = true; // Placeholder for conditional endpoints below
-    
-    // Debug endpoints - no auth required
-    app.get("/api/debug/check-db", async (req, res) => {
-      try {
-        // Check if tables exist and have data
-        const users = await storage.getUsers();
-        
-        res.json({
-          usersCount: users?.length || 0,
-          connectionStatus: 'connected',
-          tablesExist: tablesExist
-        });
-      } catch (error) {
-        res.status(500).json({ 
-          message: "Error checking tables",
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    });
-    
-    // Debug endpoint to run a direct SQL query to add an admin user
-    app.post("/api/debug/add-admin-direct", async (req, res) => {
-      try {
-        // Create a test admin user directly with SQL to bypass RLS
-        const scryptAsync = promisify(scrypt);
-        
-        const hashPassword = async (password: string) => {
-          const salt = randomBytes(16).toString("hex");
-          const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-          return `${buf.toString("hex")}.${salt}`;
-        };
-        
-        const hashedPassword = await hashPassword("admin123");
-        const now = new Date().toISOString();
-        
-        // Check if supabase client is available
-        if (!storage.supabase) {
-          throw new Error('Supabase client not available');
-        }
-        
-        // Direct insert to bypass RLS policies
-        const { data, error } = await storage.supabase
-          .from('users')
-          .insert({
-            username: 'admin',
-            password: hashedPassword,
-            full_name: 'Administrator',
-            email: 'admin@example.com',
-            role: 'admin',
-            join_date: now
-          })
-          .select();
-        
-        if (error) throw error;
-        
-        res.status(201).json({
-          message: "Test admin user created via direct SQL",
-          success: true,
-          data
-        });
-      } catch (error) {
-        console.error('Error creating admin user via SQL:', error);
-        res.status(500).json({ 
-          message: "Error creating admin user",
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    });
-    
-    // Debug endpoint to create a test user
-    app.post("/api/debug/create-test-user", async (req, res) => {
-      try {
-        // Create a test admin user
-        const scryptAsync = promisify(scrypt);
-        
-        const hashPassword = async (password: string) => {
-          const salt = randomBytes(16).toString("hex");
-          const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-          return `${buf.toString("hex")}.${salt}`;
-        };
-        
-        const user = await storage.createUser({
-          username: "admin",
-          password: await hashPassword("admin123"),
-          fullName: "Administrator",
-          email: "admin@example.com",
-          role: "admin",
-        });
-        
-        res.status(201).json({
-          message: "Test user created successfully",
-          user: {
-            id: user.id,
-            username: user.username,
-            fullName: user.fullName,
-            role: user.role
-          }
-        });
-      } catch (error) {
-        console.error('Error creating test user:', error);
-        res.status(500).json({ 
-          message: "Error creating test user",
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    });
+  // Debug endpoint to check the database connection
+  app.get("/api/debug/check-db", async (req: Request, res: Response) => {
+    try {
+      // Check if users exist
+      const users = await storage.getUsers();
+      
+      res.json({
+        usersCount: users?.length || 0,
+        connectionStatus: 'connected',
+        tablesExist: true
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error checking database",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
   
-  // Add a block to maintain code structure without the else condition
-  if (process.env.USE_SUPABASE !== 'true') {
-    console.warn('[storage] Using in-memory storage');
-  }
+  // Debug endpoint to create a test user
+  app.post("/api/debug/create-test-user", async (req: Request, res: Response) => {
+    try {
+      // Create a test admin user
+      const scryptAsync = promisify(scrypt);
+      
+      const hashPassword = async (password: string) => {
+        const salt = randomBytes(16).toString("hex");
+        const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+        return `${buf.toString("hex")}.${salt}`;
+      };
+      
+      const user = await storage.createUser({
+        username: "admin",
+        password: await hashPassword("admin123"),
+        fullName: "Administrator",
+        email: "admin@example.com",
+        role: "admin",
+      });
+      
+      res.status(201).json({
+        message: "Test user created successfully",
+        user: {
+          id: user.id,
+          username: user.username,
+          fullName: user.fullName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      console.error('Error creating test user:', error);
+      res.status(500).json({ 
+        message: "Error creating test user",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Set up authentication routes
   setupAuth(app);
 
   // User routes
-  app.get("/api/users", async (req, res, next) => {
+  app.get("/api/users", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -152,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:role", async (req, res, next) => {
+  app.get("/api/users/:role", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -171,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get specific user by ID
-  app.get("/api/user/:id", async (req, res, next) => {
+  app.get("/api/user/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -191,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get student profile by user ID
-  app.get("/api/students/user/:userId", async (req, res, next) => {
+  app.get("/api/students/user/:userId", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -211,7 +151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Classes routes
-  app.get("/api/classes", async (req, res, next) => {
+  app.get("/api/classes", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -224,7 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/classes/teacher/:id", async (req, res, next) => {
+  app.get("/api/classes/teacher/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -238,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/classes", async (req, res, next) => {
+  app.post("/api/classes", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -253,7 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Attendance routes
-  app.get("/api/attendance", async (req, res, next) => {
+  app.get("/api/attendance", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -281,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/attendance", async (req, res, next) => {
+  app.post("/api/attendance", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || 
          (req.user?.role !== "admin" && req.user?.role !== "teacher")) {
@@ -296,7 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/attendance/:id", async (req, res, next) => {
+  app.patch("/api/attendance/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || 
          (req.user?.role !== "admin" && req.user?.role !== "teacher")) {
@@ -322,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test results routes
-  app.get("/api/test-results", async (req, res, next) => {
+  app.get("/api/test-results", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -362,7 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/test-results", async (req, res, next) => {
+  app.post("/api/test-results", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || 
          (req.user?.role !== "admin" && req.user?.role !== "teacher")) {
@@ -377,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/test-results/:id", async (req, res, next) => {
+  app.patch("/api/test-results/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || 
          (req.user?.role !== "admin" && req.user?.role !== "teacher")) {
@@ -403,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Installment routes
-  app.get("/api/installments", async (req, res, next) => {
+  app.get("/api/installments", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -454,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/installments", async (req, res, next) => {
+  app.post("/api/installments", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -468,7 +408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/installments/:id", async (req, res, next) => {
+  app.patch("/api/installments/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -498,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Events routes
-  app.get("/api/events", async (req, res, next) => {
+  app.get("/api/events", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -511,7 +451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events", async (req, res, next) => {
+  app.post("/api/events", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -526,7 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Financial Reports API - Admin only
-  app.get("/api/reports/finance", async (req, res, next) => {
+  app.get("/api/reports/finance", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -552,7 +492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Teacher Payment routes
-  app.get("/api/teacher-payments", async (req, res, next) => {
+  app.get("/api/teacher-payments", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -593,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.post("/api/teacher-payments", async (req, res, next) => {
+  app.post("/api/teacher-payments", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -607,7 +547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.patch("/api/teacher-payments/:id", async (req, res, next) => {
+  app.patch("/api/teacher-payments/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.isAuthenticated() || req.user?.role !== "admin") {
         return res.status(403).json({ message: "Unauthorized" });
@@ -636,34 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Student Registration route
-  app.post("/api/student-registration", async (req, res, next) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      // Only allow admin and teacher roles to register students
-      if (req.user?.role !== "admin" && req.user?.role !== "teacher") {
-        return res.status(403).json({ message: "Forbidden: Access denied" });
-      }
-      
-      // In a production app, here we would:
-      // 1. Handle file upload (for the passport photo)
-      // 2. Validate the form data
-      // 3. Save the data to the database
-      
-      // For now, we'll just return a success response
-      res.status(201).json({ 
-        message: "Student registration submitted successfully",
-        data: req.body
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Create HTTP server
+  // Create and return the server instance
   const httpServer = createServer(app);
   return httpServer;
 }

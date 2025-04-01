@@ -60,11 +60,23 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
-      if (!user || !(await comparePasswords(password, user.password))) {
-        return done(null, false);
-      } else {
+      try {
+        const user = await storage.getUserByUsername(username);
+        if (!user) {
+          console.log('User not found:', username);
+          return done(null, false);
+        }
+        
+        const isValidPassword = await comparePasswords(password, user.password);
+        if (!isValidPassword) {
+          console.log('Invalid password for user:', username);
+          return done(null, false);
+        }
+        
         return done(null, user);
+      } catch (error) {
+        console.error('Login error:', error);
+        return done(error);
       }
     }),
   );
@@ -82,9 +94,14 @@ export function setupAuth(app: Express) {
         return res.status(400).send("Username already exists");
       }
 
+      // Create user with proper data structure
       const user = await storage.createUser({
-        ...req.body,
+        username: req.body.username,
         password: await hashPassword(req.body.password),
+        fullName: req.body.fullName,
+        email: req.body.email,
+        role: req.body.role,
+        grade: req.body.grade
       });
 
       req.login(user, (err) => {
@@ -92,6 +109,7 @@ export function setupAuth(app: Express) {
         res.status(201).json(user);
       });
     } catch (error) {
+      console.error("Registration error:", error);
       next(error);
     }
   });

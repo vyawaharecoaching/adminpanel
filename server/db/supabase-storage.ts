@@ -17,6 +17,7 @@ const MemoryStore = createMemoryStore(session);
 
 export class SupabaseStorage implements IStorage {
   sessionStore: session.Store;
+  supabase = supabase;
 
   constructor() {
     this.sessionStore = new MemoryStore({
@@ -26,57 +27,172 @@ export class SupabaseStorage implements IStorage {
 
   // User related methods
   async getUser(id: number): Promise<User | undefined> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error || !data) return undefined;
-    return data as User;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        console.error('Error in getUser:', error);
+        return undefined;
+      }
+      
+      if (!data) {
+        console.log('No user found with id:', id);
+        return undefined;
+      }
+      
+      // Transform snake_case to camelCase
+      const user: User = {
+        id: data.id,
+        username: data.username,
+        password: data.password,
+        fullName: data.full_name,
+        email: data.email,
+        role: data.role,
+        grade: data.grade,
+        joinDate: data.join_date
+      };
+      
+      return user;
+    } catch (error) {
+      console.error('Exception in getUser:', error);
+      return undefined;
+    }
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .single();
-    
-    if (error || !data) return undefined;
-    return data as User;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
+      
+      if (error) {
+        console.error('Error in getUserByUsername:', error);
+        return undefined;
+      }
+      
+      if (!data) {
+        console.log('No user found with username:', username);
+        return undefined;
+      }
+      
+      // Transform snake_case to camelCase if needed
+      const user: User = {
+        id: data.id,
+        username: data.username,
+        password: data.password,
+        fullName: data.full_name,
+        email: data.email,
+        role: data.role,
+        grade: data.grade,
+        joinDate: data.join_date
+      };
+      
+      return user;
+    } catch (error) {
+      console.error('Exception in getUserByUsername:', error);
+      return undefined;
+    }
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const { data, error } = await supabase
-      .from('users')
-      .insert([user])
-      .select()
-      .single();
-    
-    if (error) throw new Error(`Failed to create user: ${error.message}`);
-    if (!data) throw new Error('Failed to create user: No data returned');
-    
-    return data as User;
+    try {
+      // Convert camelCase to snake_case for Supabase
+      const transformedUser = {
+        username: user.username,
+        password: user.password,
+        full_name: user.fullName,
+        email: user.email,
+        role: user.role,
+        grade: user.grade
+      };
+      
+      const { data, error } = await supabase
+        .from('users')
+        .insert([transformedUser])
+        .select()
+        .single();
+      
+      if (error) throw new Error(`Failed to create user: ${error.message}`);
+      if (!data) throw new Error('Failed to create user: No data returned');
+      
+      // Transform the returned data back to camelCase
+      const newUser: User = {
+        id: data.id,
+        username: data.username,
+        password: data.password,
+        fullName: data.full_name,
+        email: data.email,
+        role: data.role,
+        grade: data.grade,
+        joinDate: data.join_date
+      };
+      
+      return newUser;
+    } catch (error) {
+      console.error('Error in createUser:', error);
+      throw error;
+    }
   }
 
   async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*');
-    
-    if (error) throw new Error(`Failed to get users: ${error.message}`);
-    return (data || []) as User[];
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+      
+      if (error) throw new Error(`Failed to get users: ${error.message}`);
+      
+      // Transform each user from snake_case to camelCase
+      const users: User[] = (data || []).map(user => ({
+        id: user.id,
+        username: user.username,
+        password: user.password,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.role,
+        grade: user.grade,
+        joinDate: user.join_date
+      }));
+      
+      return users;
+    } catch (error) {
+      console.error('Error in getUsers:', error);
+      throw error;
+    }
   }
 
   async getUsersByRole(role: string): Promise<User[]> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('role', role);
-    
-    if (error) throw new Error(`Failed to get users by role: ${error.message}`);
-    return (data || []) as User[];
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', role);
+      
+      if (error) throw new Error(`Failed to get users by role: ${error.message}`);
+      
+      // Transform each user from snake_case to camelCase
+      const users: User[] = (data || []).map(user => ({
+        id: user.id,
+        username: user.username,
+        password: user.password,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.role,
+        grade: user.grade,
+        joinDate: user.join_date
+      }));
+      
+      return users;
+    } catch (error) {
+      console.error('Error in getUsersByRole:', error);
+      throw error;
+    }
   }
   
   // Student related methods
@@ -95,7 +211,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('students')
       .select('*')
-      .eq('userId', userId)
+      .eq('user_id', userId)
       .single();
     
     if (error || !data) return undefined;
@@ -103,9 +219,18 @@ export class SupabaseStorage implements IStorage {
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedStudent = {
+      user_id: student.userId,
+      parent_name: student.parentName,
+      phone: student.phone,
+      address: student.address,
+      date_of_birth: student.dateOfBirth
+    };
+    
     const { data, error } = await supabase
       .from('students')
-      .insert([student])
+      .insert([transformedStudent])
       .select()
       .single();
     
@@ -149,16 +274,24 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('classes')
       .select('*')
-      .eq('teacherId', teacherId);
+      .eq('teacher_id', teacherId);
     
     if (error) throw new Error(`Failed to get classes by teacher: ${error.message}`);
     return (data || []) as Class[];
   }
 
   async createClass(classData: InsertClass): Promise<Class> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedClass = {
+      name: classData.name,
+      teacher_id: classData.teacherId,
+      grade: classData.grade,
+      schedule: classData.schedule
+    };
+    
     const { data, error } = await supabase
       .from('classes')
-      .insert([classData])
+      .insert([transformedClass])
       .select()
       .single();
     
@@ -184,7 +317,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('attendance')
       .select('*')
-      .eq('classId', classId);
+      .eq('class_id', classId);
     
     if (error) throw new Error(`Failed to get attendance by class: ${error.message}`);
     return (data || []) as Attendance[];
@@ -194,7 +327,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('attendance')
       .select('*')
-      .eq('studentId', studentId);
+      .eq('student_id', studentId);
     
     if (error) throw new Error(`Failed to get attendance by student: ${error.message}`);
     return (data || []) as Attendance[];
@@ -213,9 +346,17 @@ export class SupabaseStorage implements IStorage {
   }
 
   async createAttendance(attendance: InsertAttendance): Promise<Attendance> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedAttendance = {
+      student_id: attendance.studentId,
+      class_id: attendance.classId,
+      date: attendance.date,
+      status: attendance.status
+    };
+    
     const { data, error } = await supabase
       .from('attendance')
-      .insert([attendance])
+      .insert([transformedAttendance])
       .select()
       .single();
     
@@ -253,7 +394,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('test_results')
       .select('*')
-      .eq('classId', classId);
+      .eq('class_id', classId);
     
     if (error) throw new Error(`Failed to get test results by class: ${error.message}`);
     return (data || []) as TestResult[];
@@ -263,16 +404,27 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('test_results')
       .select('*')
-      .eq('studentId', studentId);
+      .eq('student_id', studentId);
     
     if (error) throw new Error(`Failed to get test results by student: ${error.message}`);
     return (data || []) as TestResult[];
   }
 
   async createTestResult(result: InsertTestResult): Promise<TestResult> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedResult = {
+      name: result.name,
+      student_id: result.studentId,
+      class_id: result.classId,
+      date: result.date,
+      score: result.score,
+      max_score: result.maxScore,
+      status: result.status
+    };
+    
     const { data, error } = await supabase
       .from('test_results')
-      .insert([result])
+      .insert([transformedResult])
       .select()
       .single();
     
@@ -310,7 +462,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('installments')
       .select('*')
-      .eq('studentId', studentId);
+      .eq('student_id', studentId);
     
     if (error) throw new Error(`Failed to get installments by student: ${error.message}`);
     return (data || []) as Installment[];
@@ -327,9 +479,18 @@ export class SupabaseStorage implements IStorage {
   }
 
   async createInstallment(installment: InsertInstallment): Promise<Installment> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedInstallment = {
+      student_id: installment.studentId,
+      amount: installment.amount,
+      due_date: installment.dueDate,
+      payment_date: installment.paymentDate,
+      status: installment.status
+    };
+    
     const { data, error } = await supabase
       .from('installments')
-      .insert([installment])
+      .insert([transformedInstallment])
       .select()
       .single();
     
@@ -342,7 +503,7 @@ export class SupabaseStorage implements IStorage {
   async updateInstallment(id: number, status: string, paymentDate?: Date): Promise<Installment | undefined> {
     const updateData: any = { status };
     if (paymentDate) {
-      updateData.paymentDate = paymentDate.toISOString();
+      updateData.payment_date = paymentDate.toISOString();
     }
     
     const { data, error } = await supabase
@@ -378,9 +539,18 @@ export class SupabaseStorage implements IStorage {
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedEvent = {
+      title: event.title,
+      description: event.description,
+      date: event.date,
+      time: event.time,
+      target_grades: event.targetGrades
+    };
+    
     const { data, error } = await supabase
       .from('events')
-      .insert([event])
+      .insert([transformedEvent])
       .select()
       .single();
     
@@ -406,7 +576,7 @@ export class SupabaseStorage implements IStorage {
     const { data, error } = await supabase
       .from('teacher_payments')
       .select('*')
-      .eq('teacherId', teacherId);
+      .eq('teacher_id', teacherId);
     
     if (error) throw new Error(`Failed to get teacher payments by teacher: ${error.message}`);
     return (data || []) as TeacherPayment[];
@@ -433,9 +603,19 @@ export class SupabaseStorage implements IStorage {
   }
 
   async createTeacherPayment(payment: InsertTeacherPayment): Promise<TeacherPayment> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedPayment = {
+      teacher_id: payment.teacherId,
+      amount: payment.amount,
+      month: payment.month,
+      description: payment.description,
+      payment_date: payment.paymentDate,
+      status: payment.status
+    };
+    
     const { data, error } = await supabase
       .from('teacher_payments')
-      .insert([payment])
+      .insert([transformedPayment])
       .select()
       .single();
     
@@ -448,7 +628,7 @@ export class SupabaseStorage implements IStorage {
   async updateTeacherPayment(id: number, status: string, paymentDate?: Date): Promise<TeacherPayment | undefined> {
     const updateData: any = { status };
     if (paymentDate) {
-      updateData.paymentDate = paymentDate.toISOString();
+      updateData.payment_date = paymentDate.toISOString();
     }
     
     const { data, error } = await supabase

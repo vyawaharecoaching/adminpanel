@@ -18,6 +18,8 @@ import { initSupabase } from './db/supabase';
 const MemoryStore = createMemoryStore(session);
 
 export interface IStorage {
+  supabase?: any; // Supabase client instance
+  
   // User related methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -94,6 +96,9 @@ export class MemStorage implements IStorage {
   currentInstallmentId: number;
   currentEventId: number;
   currentTeacherPaymentId: number;
+  
+  // Supabase property - undefined for MemStorage
+  supabase?: any = undefined;
   
   sessionStore: Store;
 
@@ -647,8 +652,8 @@ export class MemStorage implements IStorage {
 }
 
 // Configure which storage to use
-// Set to true to use Supabase for persistence
-const USE_SUPABASE = true; 
+// Set to true to use Supabase for persistence, false for in-memory storage
+const USE_SUPABASE = false; 
 
 // Export the appropriate storage implementation
 export const storage = USE_SUPABASE 
