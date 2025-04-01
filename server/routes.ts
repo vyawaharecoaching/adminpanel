@@ -10,8 +10,17 @@ import {
   insertInstallmentSchema, 
   insertEventSchema 
 } from "@shared/schema";
+import { connectToDatabase } from "./db/connection";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Connect to MongoDB database
+  try {
+    await connectToDatabase();
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error);
+    console.log('Continuing with in-memory storage');
+  }
+
   // Set up authentication routes
   setupAuth(app);
 

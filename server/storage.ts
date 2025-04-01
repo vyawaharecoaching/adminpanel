@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import createMemoryStore from "memorystore";
 import session from "express-session";
+import { Store } from "express-session";
 
 // Create a memory store for sessions
 const MemoryStore = createMemoryStore(session);
@@ -61,7 +62,7 @@ export interface IStorage {
   createEvent(event: InsertEvent): Promise<Event>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: Store;
 }
 
 export class MemStorage implements IStorage {
@@ -81,7 +82,7 @@ export class MemStorage implements IStorage {
   currentInstallmentId: number;
   currentEventId: number;
   
-  sessionStore: session.SessionStore;
+  sessionStore: Store;
 
   constructor() {
     this.users = new Map();
@@ -119,7 +120,13 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
     const joinDate = new Date();
-    const user: User = { ...insertUser, id, joinDate };
+    const user: User = { 
+      ...insertUser, 
+      id, 
+      joinDate,
+      role: insertUser.role || "student", 
+      grade: insertUser.grade || null
+    };
     this.users.set(id, user);
     return user;
   }
@@ -145,7 +152,14 @@ export class MemStorage implements IStorage {
   
   async createStudent(insertStudent: InsertStudent): Promise<Student> {
     const id = this.currentStudentId++;
-    const student: Student = { ...insertStudent, id };
+    const student: Student = { 
+      ...insertStudent, 
+      id,
+      parentName: insertStudent.parentName || null,
+      phone: insertStudent.phone || null,
+      address: insertStudent.address || null,
+      dateOfBirth: insertStudent.dateOfBirth || null
+    };
     this.students.set(id, student);
     return student;
   }
@@ -171,7 +185,11 @@ export class MemStorage implements IStorage {
   
   async createClass(insertClass: InsertClass): Promise<Class> {
     const id = this.currentClassId++;
-    const cls: Class = { ...insertClass, id };
+    const cls: Class = { 
+      ...insertClass, 
+      id,
+      schedule: insertClass.schedule || null
+    };
     this.classes.set(id, cls);
     return cls;
   }
@@ -205,7 +223,11 @@ export class MemStorage implements IStorage {
   
   async createAttendance(insertAttendance: InsertAttendance): Promise<Attendance> {
     const id = this.currentAttendanceId++;
-    const attendance: Attendance = { ...insertAttendance, id };
+    const attendance: Attendance = { 
+      ...insertAttendance, 
+      id, 
+      status: insertAttendance.status || "present" 
+    };
     this.attendance.set(id, attendance);
     return attendance;
   }
@@ -241,7 +263,12 @@ export class MemStorage implements IStorage {
   
   async createTestResult(insertResult: InsertTestResult): Promise<TestResult> {
     const id = this.currentTestResultId++;
-    const result: TestResult = { ...insertResult, id };
+    const result: TestResult = { 
+      ...insertResult, 
+      id,
+      status: insertResult.status || "pending",
+      maxScore: insertResult.maxScore || 100
+    };
     this.testResults.set(id, result);
     return result;
   }
@@ -278,7 +305,12 @@ export class MemStorage implements IStorage {
   
   async createInstallment(insertInstallment: InsertInstallment): Promise<Installment> {
     const id = this.currentInstallmentId++;
-    const installment: Installment = { ...insertInstallment, id };
+    const installment: Installment = { 
+      ...insertInstallment, 
+      id,
+      status: insertInstallment.status || "pending",
+      paymentDate: insertInstallment.paymentDate || null
+    };
     this.installments.set(id, installment);
     return installment;
   }
@@ -287,10 +319,16 @@ export class MemStorage implements IStorage {
     const installment = this.installments.get(id);
     if (!installment) return undefined;
     
+    // Convert Date to string for storage
+    let paymentDateStr: string | null = null;
+    if (paymentDate) {
+      paymentDateStr = paymentDate.toISOString();
+    }
+    
     const updatedInstallment = { 
       ...installment, 
       status: status as "paid" | "pending" | "overdue",
-      paymentDate
+      paymentDate: paymentDateStr
     };
     this.installments.set(id, updatedInstallment);
     return updatedInstallment;
@@ -307,10 +345,26 @@ export class MemStorage implements IStorage {
   
   async createEvent(insertEvent: InsertEvent): Promise<Event> {
     const id = this.currentEventId++;
-    const event: Event = { ...insertEvent, id };
+    const event: Event = { 
+      ...insertEvent, 
+      id,
+      description: insertEvent.description || null,
+      time: insertEvent.time || null,
+      targetGrades: insertEvent.targetGrades || null
+    };
     this.events.set(id, event);
     return event;
   }
 }
 
-export const storage = new MemStorage();
+import { MongoDBStorage } from './db/mongodb-storage';
+
+// Configure which storage to use, defaulting to in-memory storage
+// This can be overridden by setting USE_MONGODB environment variable to 'true'
+const USE_MONGODB = process.env.USE_MONGODB === 'true';
+
+// Export the appropriate storage implementation
+// We'll default to MemStorage for simplicity and reliability
+export const storage = USE_MONGODB 
+  ? new MongoDBStorage() 
+  : new MemStorage();
