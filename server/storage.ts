@@ -5,11 +5,14 @@ import {
   Attendance, InsertAttendance, 
   TestResult, InsertTestResult, 
   Installment, InsertInstallment, 
-  Event, InsertEvent 
+  Event, InsertEvent,
+  TeacherPayment, InsertTeacherPayment
 } from "@shared/schema";
 import createMemoryStore from "memorystore";
 import session from "express-session";
 import { Store } from "express-session";
+import { SupabaseStorage } from './db/supabase-storage';
+import { initSupabase } from './db/supabase';
 
 // Create a memory store for sessions
 const MemoryStore = createMemoryStore(session);
@@ -61,6 +64,14 @@ export interface IStorage {
   getEvents(): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
   
+  // Teacher Payment related methods
+  getTeacherPayment(id: number): Promise<TeacherPayment | undefined>;
+  getTeacherPaymentsByTeacher(teacherId: number): Promise<TeacherPayment[]>;
+  getTeacherPaymentsByMonth(month: string): Promise<TeacherPayment[]>;
+  getTeacherPaymentsByStatus(status: string): Promise<TeacherPayment[]>;
+  createTeacherPayment(payment: InsertTeacherPayment): Promise<TeacherPayment>;
+  updateTeacherPayment(id: number, status: string, paymentDate?: Date): Promise<TeacherPayment | undefined>;
+  
   // Session store
   sessionStore: Store;
 }
@@ -73,6 +84,7 @@ export class MemStorage implements IStorage {
   private testResults: Map<number, TestResult>;
   private installments: Map<number, Installment>;
   private events: Map<number, Event>;
+  private teacherPayments: Map<number, TeacherPayment>;
   
   currentUserId: number;
   currentStudentId: number;
@@ -81,6 +93,7 @@ export class MemStorage implements IStorage {
   currentTestResultId: number;
   currentInstallmentId: number;
   currentEventId: number;
+  currentTeacherPaymentId: number;
   
   sessionStore: Store;
 
@@ -92,6 +105,7 @@ export class MemStorage implements IStorage {
     this.testResults = new Map();
     this.installments = new Map();
     this.events = new Map();
+    this.teacherPayments = new Map();
     
     this.currentUserId = 1;
     this.currentStudentId = 1;
@@ -100,6 +114,7 @@ export class MemStorage implements IStorage {
     this.currentTestResultId = 1;
     this.currentInstallmentId = 1;
     this.currentEventId = 1;
+    this.currentTeacherPaymentId = 1;
     
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000 // prune expired entries every 24h
@@ -292,6 +307,34 @@ export class MemStorage implements IStorage {
         date: nextTwoWeeks.toISOString(),
         time: "9:00 AM - 4:00 PM",
         targetGrades: "8th, 9th, 10th"
+      });
+      
+      // Create sample teacher payments
+      // For current month (paid)
+      const currentDate = new Date();
+      const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      await this.createTeacherPayment({
+        teacherId: teacherUser.id,
+        amount: 25000,
+        month: currentMonth,
+        description: "Monthly salary",
+        paymentDate: currentDate.toISOString(),
+        status: "paid"
+      });
+      
+      // For next month (pending)
+      const nextMonthDate = new Date();
+      nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+      const nextMonthString = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      await this.createTeacherPayment({
+        teacherId: teacherUser.id,
+        amount: 25000,
+        month: nextMonthString,
+        description: "Monthly salary",
+        paymentDate: nextMonthDate.toISOString(),
+        status: "pending"
       });
     } catch (error) {
       console.error("Failed to add sample data:", error);
@@ -547,16 +590,80 @@ export class MemStorage implements IStorage {
     this.events.set(id, event);
     return event;
   }
+
+  // Teacher Payment methods
+  async getTeacherPayment(id: number): Promise<TeacherPayment | undefined> {
+    return this.teacherPayments.get(id);
+  }
+  
+  async getTeacherPaymentsByTeacher(teacherId: number): Promise<TeacherPayment[]> {
+    return Array.from(this.teacherPayments.values()).filter(
+      (payment) => payment.teacherId === teacherId,
+    );
+  }
+  
+  async getTeacherPaymentsByMonth(month: string): Promise<TeacherPayment[]> {
+    return Array.from(this.teacherPayments.values()).filter(
+      (payment) => payment.month === month,
+    );
+  }
+  
+  async getTeacherPaymentsByStatus(status: string): Promise<TeacherPayment[]> {
+    return Array.from(this.teacherPayments.values()).filter(
+      (payment) => payment.status === status,
+    );
+  }
+  
+  async createTeacherPayment(insertPayment: InsertTeacherPayment): Promise<TeacherPayment> {
+    const id = this.currentTeacherPaymentId++;
+    const payment: TeacherPayment = { 
+      ...insertPayment, 
+      id,
+      description: insertPayment.description || null,
+      status: insertPayment.status || "pending"
+    };
+    this.teacherPayments.set(id, payment);
+    return payment;
+  }
+  
+  async updateTeacherPayment(id: number, status: string, paymentDate?: Date): Promise<TeacherPayment | undefined> {
+    const payment = this.teacherPayments.get(id);
+    if (!payment) return undefined;
+    
+    // Convert Date to string for storage if provided
+    let paymentDateStr = payment.paymentDate;
+    if (paymentDate) {
+      paymentDateStr = paymentDate.toISOString();
+    }
+    
+    const updatedPayment = { 
+      ...payment, 
+      status: status as "paid" | "pending",
+      paymentDate: paymentDateStr
+    };
+    this.teacherPayments.set(id, updatedPayment);
+    return updatedPayment;
+  }
 }
 
-import { MongoDBStorage } from './db/mongodb-storage';
-
-// Configure which storage to use, defaulting to in-memory storage
-// This can be overridden by setting USE_MONGODB environment variable to 'true'
-const USE_MONGODB = process.env.USE_MONGODB === 'true';
+// Configure which storage to use
+// Set to true to use Supabase for persistence
+const USE_SUPABASE = true; 
 
 // Export the appropriate storage implementation
-// We'll default to MemStorage for simplicity and reliability
-export const storage = USE_MONGODB 
-  ? new MongoDBStorage() 
+export const storage = USE_SUPABASE 
+  ? new SupabaseStorage() 
   : new MemStorage();
+
+// Initialize Supabase connection if we're using it
+if (USE_SUPABASE) {
+  initSupabase()
+    .then(connected => {
+      if (!connected) {
+        console.warn('[supabase] Failed to connect to Supabase, falling back to in-memory storage');
+      }
+    })
+    .catch(err => {
+      console.error('[supabase] Error initializing Supabase:', err);
+    });
+}

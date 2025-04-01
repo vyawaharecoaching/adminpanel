@@ -8,6 +8,7 @@ import Teachers from "@/pages/teachers";
 import Attendance from "@/pages/attendance";
 import TestResults from "@/pages/test-results";
 import Installments from "@/pages/installments";
+import Reports from "@/pages/reports";
 import AccountSettings from "@/pages/account-settings";
 import StudentProfile from "@/pages/student-profile";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -26,6 +27,7 @@ const AppRoutes = () => {
         <ProtectedRoute path="/attendance" component={Attendance} />
         <ProtectedRoute path="/test-results" component={TestResults} />
         <ProtectedRoute path="/installments" component={Installments} />
+        <ProtectedRoute path="/reports" component={Reports} />
         <ProtectedRoute path="/account-settings" component={AccountSettings} />
         <ProtectedRoute path="/student/:studentId" component={StudentProfile} />
         <Route path="/:rest*">

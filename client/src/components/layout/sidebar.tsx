@@ -2,7 +2,8 @@ import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 import { 
   Home, Users, GraduationCap, CalendarCheck, FileText, 
-  Banknote, Settings, ChevronDown, ChevronUp, UserPlus
+  Banknote, Settings, ChevronDown, ChevronUp, UserPlus,
+  BarChart
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
@@ -95,20 +96,12 @@ export const Sidebar = ({ isOpen, setIsOpen }: SidebarProps) => {
         />
 
         {(isAdmin || isTeacher) && (
-          <>
-            <NavItem 
-              href="/teachers" 
-              icon={<GraduationCap className="h-5 w-5" />} 
-              label="Teachers" 
-              active={location === "/teachers"} 
-            />
-            <NavItem 
-              href="/student-registration" 
-              icon={<UserPlus className="h-5 w-5" />} 
-              label="Student Registration" 
-              active={location === "/student-registration"} 
-            />
-          </>
+          <NavItem 
+            href="/teachers" 
+            icon={<GraduationCap className="h-5 w-5" />} 
+            label="Teachers" 
+            active={location === "/teachers"} 
+          />
         )}
 
         <div className="flex items-center px-4 py-2 mt-4 justify-between">
@@ -155,13 +148,27 @@ export const Sidebar = ({ isOpen, setIsOpen }: SidebarProps) => {
           </button>
         </div>
 
-        {financeExpanded && (isAdmin || isTeacher) && (
-          <NavItem 
-            href="/installments" 
-            icon={<Banknote className="h-5 w-5" />} 
-            label="Installments" 
-            active={location === "/installments"} 
-          />
+        {financeExpanded && (
+          <>
+            {(isAdmin || isTeacher) && (
+              <NavItem 
+                href="/installments" 
+                icon={<Banknote className="h-5 w-5" />} 
+                label="Installments" 
+                active={location === "/installments"} 
+              />
+            )}
+            
+            {/* Reports link - Admin only */}
+            {isAdmin && (
+              <NavItem 
+                href="/reports" 
+                icon={<BarChart className="h-5 w-5" />} 
+                label="Reports" 
+                active={location === "/reports"} 
+              />
+            )}
+          </>
         )}
 
         <NavSection title="Settings">

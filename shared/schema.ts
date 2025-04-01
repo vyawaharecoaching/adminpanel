@@ -152,3 +152,26 @@ export type Installment = typeof installments.$inferSelect;
 
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Event = typeof events.$inferSelect;
+
+// Teacher Payments model
+export const teacherPayments = pgTable("teacher_payments", {
+  id: serial("id").primaryKey(),
+  teacherId: integer("teacher_id").notNull(),
+  amount: real("amount").notNull(),
+  month: text("month").notNull(), // Format: YYYY-MM
+  description: text("description"),
+  paymentDate: date("payment_date").notNull(),
+  status: text("status", { enum: ["paid", "pending"] }).notNull().default("pending"),
+});
+
+export const insertTeacherPaymentSchema = createInsertSchema(teacherPayments).pick({
+  teacherId: true,
+  amount: true,
+  month: true,
+  description: true,
+  paymentDate: true,
+  status: true,
+});
+
+export type InsertTeacherPayment = z.infer<typeof insertTeacherPaymentSchema>;
+export type TeacherPayment = typeof teacherPayments.$inferSelect;

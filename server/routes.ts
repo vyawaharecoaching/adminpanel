@@ -8,20 +8,33 @@ import {
   insertAttendanceSchema, 
   insertTestResultSchema, 
   insertInstallmentSchema, 
-  insertEventSchema 
+  insertEventSchema,
+  insertTeacherPaymentSchema
 } from "@shared/schema";
-import { connectToDatabase } from "./db/connection";
+import { initSupabase } from "./db/supabase";
+
+import { initSupabaseTables, checkSupabaseTables, addSampleDataToSupabase } from "./db/init-supabase";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Force using MongoDB for the database connection
-  process.env.USE_MONGODB = 'true';
+  // Using Supabase for persistence
+  process.env.USE_SUPABASE = 'true';
   
-  // Connect to MongoDB database
-  try {
-    await connectToDatabase();
-  } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
-    console.log('Continuing with in-memory storage');
+  // Initialize Supabase connection
+  const connected = await initSupabase();
+  
+  if (connected) {
+    console.log('[storage] Using Supabase for data persistence');
+    
+    // Check if tables exist, if not create them and add sample data
+    const tablesExist = await checkSupabaseTables();
+    
+    if (!tablesExist) {
+      await initSupabaseTables();
+      await addSampleDataToSupabase();
+    }
+  } else {
+    console.warn('[storage] Failed to connect to Supabase, using in-memory storage');
+    process.env.USE_SUPABASE = 'false';
   }
 
   // Set up authentication routes
@@ -408,6 +421,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertEventSchema.parse(req.body);
       const event = await storage.createEvent(validatedData);
       res.status(201).json(event);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Financial Reports API - Admin only
+  app.get("/api/reports/finance", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated() || req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const { period, date } = req.query;
+      const installments = await storage.getInstallmentsByStatus('paid');
+      
+      // Basic aggregations on the data
+      const totalRevenue = installments.reduce((sum, item) => sum + item.amount, 0);
+      const paymentCount = installments.length;
+      const averagePayment = paymentCount > 0 ? totalRevenue / paymentCount : 0;
+      
+      res.json({
+        totalRevenue,
+        paymentCount,
+        averagePayment,
+        installments
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Teacher Payment routes
+  app.get("/api/teacher-payments", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Only admin can view all teacher payments
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Forbidden: Access denied" });
+      }
+      
+      const teacherId = req.query.teacherId ? parseInt(req.query.teacherId as string, 10) : undefined;
+      const month = req.query.month as string;
+      const status = req.query.status as string;
+      
+      if (teacherId) {
+        const payments = await storage.getTeacherPaymentsByTeacher(teacherId);
+        return res.json(payments);
+      } else if (month) {
+        const payments = await storage.getTeacherPaymentsByMonth(month);
+        return res.json(payments);
+      } else if (status && ["paid", "pending"].includes(status)) {
+        const payments = await storage.getTeacherPaymentsByStatus(status);
+        return res.json(payments);
+      } else {
+        // Get payments for all teachers
+        const teachers = await storage.getUsersByRole("teacher");
+        const allPayments = [];
+        
+        for (const teacher of teachers) {
+          const payments = await storage.getTeacherPaymentsByTeacher(teacher.id);
+          allPayments.push(...payments);
+        }
+        
+        return res.json(allPayments);
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.post("/api/teacher-payments", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated() || req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const validatedData = insertTeacherPaymentSchema.parse(req.body);
+      const payment = await storage.createTeacherPayment(validatedData);
+      res.status(201).json(payment);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  app.patch("/api/teacher-payments/:id", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated() || req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const id = parseInt(req.params.id, 10);
+      const { status, paymentDate } = req.body;
+      
+      if (!["paid", "pending"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status value" });
+      }
+      
+      const updatedPayment = await storage.updateTeacherPayment(
+        id, 
+        status, 
+        paymentDate ? new Date(paymentDate) : undefined
+      );
+      
+      if (!updatedPayment) {
+        return res.status(404).json({ message: "Teacher payment not found" });
+      }
+      
+      res.json(updatedPayment);
     } catch (error) {
       next(error);
     }
