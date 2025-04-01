@@ -319,7 +319,7 @@ export default function TestResultsPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">All Classes</SelectItem>
+                            <SelectItem value="all">All Classes</SelectItem>
                             {grades.map((grade) => (
                               <SelectItem key={grade} value={grade}>
                                 {grade}
@@ -348,7 +348,7 @@ export default function TestResultsPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">All Students</SelectItem>
+                            <SelectItem value="all">All Students</SelectItem>
                             {studentsData?.map((student: any) => (
                               <SelectItem key={student.id} value={student.id.toString()}>
                                 {student.fullName}
@@ -389,7 +389,7 @@ export default function TestResultsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {resultsData?.length > 0 ? (
+                      {resultsData && resultsData.length > 0 ? (
                         resultsData.map((result) => {
                           const percentage = calculatePercentage(result.score, result.maxScore);
                           return (
@@ -413,9 +413,11 @@ export default function TestResultsPage() {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant={result.status === "graded" ? "success" : "outline"}>
-                                  {result.status === "graded" ? "Graded" : "Pending"}
-                                </Badge>
+                                {result.status === "graded" ? (
+                                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Graded</Badge>
+                                ) : (
+                                  <Badge variant="outline">Pending</Badge>
+                                )}
                               </TableCell>
                               {canManageResults && (
                                 <TableCell>

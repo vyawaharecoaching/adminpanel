@@ -57,6 +57,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       next(error);
     }
   });
+  
+  // Get specific user by ID
+  app.get("/api/user/:id", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const userId = parseInt(req.params.id, 10);
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json(user);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Get student profile by user ID
+  app.get("/api/students/user/:userId", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const userId = parseInt(req.params.userId, 10);
+      const student = await storage.getStudentByUserId(userId);
+      
+      if (!student) {
+        return res.status(404).json({ message: "Student profile not found" });
+      }
+      
+      res.json(student);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // Classes routes
   app.get("/api/classes", async (req, res, next) => {
@@ -176,15 +216,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const classId = req.query.classId ? parseInt(req.query.classId as string, 10) : undefined;
-      const studentId = req.query.studentId ? parseInt(req.query.studentId as string, 10) : undefined;
+      // Check for the special "all" value which is used in the UI
+      const hasClassFilter = req.query.classId && req.query.classId !== "all";
+      const hasStudentFilter = req.query.studentId && req.query.studentId !== "all";
       
-      if (classId) {
+      // Parse IDs if they are not "all"
+      const classId = hasClassFilter ? parseInt(req.query.classId as string, 10) : undefined;
+      const studentId = hasStudentFilter ? parseInt(req.query.studentId as string, 10) : undefined;
+      
+      if (hasClassFilter && classId) {
         const results = await storage.getTestResultsByClass(classId);
         return res.json(results);
-      } else if (studentId) {
+      } else if (hasStudentFilter && studentId) {
         const results = await storage.getTestResultsByStudent(studentId);
         return res.json(results);
+      } else if (req.query.classId === "all" || req.query.studentId === "all") {
+        // If either filter is explicitly set to "all", return all results
+        // This would ideally be paginated in a real app with many results
+        const students = await storage.getUsers();
+        const testResults = [];
+        for (const student of students) {
+          if (student.role === "student") {
+            const results = await storage.getTestResultsByStudent(student.id);
+            testResults.push(...results);
+          }
+        }
+        return res.json(testResults);
       } else {
         return res.status(400).json({ message: "Missing query parameters" });
       }
@@ -245,18 +302,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden: Access denied" });
       }
       
-      const studentId = req.query.studentId ? parseInt(req.query.studentId as string, 10) : undefined;
+      // Check for special "all" value
+      const hasStudentFilter = req.query.studentId && req.query.studentId !== "all";
+      const studentId = hasStudentFilter ? parseInt(req.query.studentId as string, 10) : undefined;
       const status = req.query.status as string;
       
-      if (studentId) {
+      if (hasStudentFilter && studentId) {
         const installments = await storage.getInstallmentsByStudent(studentId);
         return res.json(installments);
+      } else if (req.query.studentId === "all") {
+        // If studentId is explicitly set to "all", fetch installments for all students
+        const students = await storage.getUsers();
+        const allInstallments = [];
+        for (const student of students) {
+          if (student.role === "student") {
+            const installments = await storage.getInstallmentsByStudent(student.id);
+            allInstallments.push(...installments);
+          }
+        }
+        return res.json(allInstallments);
       } else if (status) {
-        if (!["paid", "pending", "overdue"].includes(status)) {
+        if (status === "all") {
+          // If status is "all", return all installments
+          const paidInstallments = await storage.getInstallmentsByStatus("paid");
+          const pendingInstallments = await storage.getInstallmentsByStatus("pending");
+          const overdueInstallments = await storage.getInstallmentsByStatus("overdue");
+          return res.json([...paidInstallments, ...pendingInstallments, ...overdueInstallments]);
+        } else if (["paid", "pending", "overdue"].includes(status)) {
+          const installments = await storage.getInstallmentsByStatus(status);
+          return res.json(installments);
+        } else {
           return res.status(400).json({ message: "Invalid status value" });
         }
-        const installments = await storage.getInstallmentsByStatus(status);
-        return res.json(installments);
       } else {
         return res.status(400).json({ message: "Missing query parameters" });
       }

@@ -104,6 +104,198 @@ export class MemStorage implements IStorage {
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000 // prune expired entries every 24h
     });
+    
+    // Add sample data
+    this.addSampleData();
+  }
+  
+  private async addSampleData() {
+    try {
+      // Create admin user
+      const adminUser = await this.createUser({
+        username: "admin",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Administrator",
+        email: "admin@vyawahare.edu",
+        role: "admin"
+      });
+      
+      // Create teacher user
+      const teacherUser = await this.createUser({
+        username: "teacher1",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Rahul Vyawahare",
+        email: "rahul@vyawahare.edu",
+        role: "teacher"
+      });
+      
+      // Create sample classes
+      const class8 = await this.createClass({
+        name: "Math Class 8th",
+        grade: "8th",
+        teacherId: teacherUser.id,
+        schedule: "Monday, Wednesday, Friday 9:00 AM - 10:30 AM"
+      });
+      
+      const class10 = await this.createClass({
+        name: "Science Class 10th",
+        grade: "10th",
+        teacherId: teacherUser.id,
+        schedule: "Tuesday, Thursday 10:30 AM - 12:00 PM"
+      });
+      
+      // Create sample students
+      const student1User = await this.createUser({
+        username: "student1",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Raj Patel",
+        email: "raj@example.com",
+        role: "student",
+        grade: "8th"
+      });
+      
+      const student1 = await this.createStudent({
+        userId: student1User.id,
+        parentName: "Suresh Patel",
+        phone: "9876543210",
+        address: "123 Main Street, Pune",
+        dateOfBirth: new Date("2010-05-15").toISOString()
+      });
+      
+      const student2User = await this.createUser({
+        username: "student2",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Priya Sharma",
+        email: "priya@example.com",
+        role: "student",
+        grade: "10th"
+      });
+      
+      const student2 = await this.createStudent({
+        userId: student2User.id,
+        parentName: "Anita Sharma",
+        phone: "9876543211",
+        address: "456 Park Avenue, Pune",
+        dateOfBirth: new Date("2008-07-20").toISOString()
+      });
+      
+      // Create sample attendance records
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const lastWeek = new Date();
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      
+      await this.createAttendance({
+        studentId: student1User.id,
+        classId: class8.id,
+        date: yesterday.toISOString(),
+        status: "present"
+      });
+      
+      await this.createAttendance({
+        studentId: student1User.id,
+        classId: class8.id,
+        date: lastWeek.toISOString(),
+        status: "absent"
+      });
+      
+      await this.createAttendance({
+        studentId: student2User.id,
+        classId: class10.id,
+        date: yesterday.toISOString(),
+        status: "present"
+      });
+      
+      // Create sample test results
+      await this.createTestResult({
+        name: "Midterm Math Exam",
+        studentId: student1User.id,
+        classId: class8.id,
+        date: lastWeek.toISOString(),
+        score: 85,
+        maxScore: 100,
+        status: "graded"
+      });
+      
+      await this.createTestResult({
+        name: "Science Quiz",
+        studentId: student2User.id,
+        classId: class10.id,
+        date: yesterday.toISOString(),
+        score: 75,
+        maxScore: 100,
+        status: "graded"
+      });
+      
+      // Create sample installments
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      
+      await this.createInstallment({
+        studentId: student1User.id,
+        amount: 5000,
+        dueDate: lastMonth.toISOString(),
+        paymentDate: lastMonth.toISOString(),
+        status: "paid"
+      });
+      
+      await this.createInstallment({
+        studentId: student1User.id,
+        amount: 5000,
+        dueDate: new Date().toISOString(),
+        status: "pending"
+      });
+      
+      await this.createInstallment({
+        studentId: student1User.id,
+        amount: 5000,
+        dueDate: nextMonth.toISOString(),
+        status: "pending"
+      });
+      
+      await this.createInstallment({
+        studentId: student2User.id,
+        amount: 6000,
+        dueDate: lastMonth.toISOString(),
+        status: "overdue"
+      });
+      
+      await this.createInstallment({
+        studentId: student2User.id,
+        amount: 6000,
+        dueDate: nextMonth.toISOString(),
+        status: "pending"
+      });
+      
+      // Create sample events
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      
+      await this.createEvent({
+        title: "Parent-Teacher Meeting",
+        description: "Annual meeting to discuss student progress",
+        date: nextWeek.toISOString(),
+        time: "10:00 AM - 2:00 PM",
+        targetGrades: "All"
+      });
+      
+      const nextTwoWeeks = new Date();
+      nextTwoWeeks.setDate(nextTwoWeeks.getDate() + 14);
+      
+      await this.createEvent({
+        title: "Science Fair",
+        description: "Annual science exhibition for students",
+        date: nextTwoWeeks.toISOString(),
+        time: "9:00 AM - 4:00 PM",
+        targetGrades: "8th, 9th, 10th"
+      });
+    } catch (error) {
+      console.error("Failed to add sample data:", error);
+    }
   }
 
   // User methods

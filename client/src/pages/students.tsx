@@ -29,8 +29,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Loader2, PlusCircle, Search } from "lucide-react";
+import { Loader2, PlusCircle, Search, User as UserIcon, BookOpen } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "wouter";
 
 export default function Students() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,7 +53,8 @@ export default function Students() {
       .toUpperCase();
   };
 
-  const formatJoinDate = (joinDate: Date | string) => {
+  const formatJoinDate = (joinDate: Date | string | null) => {
+    if (!joinDate) return 'N/A';
     return typeof joinDate === 'string' 
       ? format(new Date(joinDate), 'PPP') 
       : format(joinDate, 'PPP');
@@ -159,9 +161,12 @@ export default function Students() {
                         <TableCell>{student.grade || "N/A"}</TableCell>
                         <TableCell>{formatJoinDate(student.joinDate)}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm">
-                            View
-                          </Button>
+                          <Link href={`/student/${student.id}`}>
+                            <Button variant="ghost" size="sm" className="text-primary">
+                              <UserIcon className="mr-1 h-4 w-4" />
+                              Profile
+                            </Button>
+                          </Link>
                           <Button variant="ghost" size="sm">
                             Edit
                           </Button>
