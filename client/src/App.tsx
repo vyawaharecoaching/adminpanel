@@ -9,7 +9,6 @@ import Attendance from "@/pages/attendance";
 import TestResults from "@/pages/test-results";
 import Installments from "@/pages/installments";
 import AccountSettings from "@/pages/account-settings";
-import StudentRegistration from "@/pages/student-registration";
 import StudentProfile from "@/pages/student-profile";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
@@ -28,7 +27,6 @@ const AppRoutes = () => {
         <ProtectedRoute path="/test-results" component={TestResults} />
         <ProtectedRoute path="/installments" component={Installments} />
         <ProtectedRoute path="/account-settings" component={AccountSettings} />
-        <ProtectedRoute path="/student-registration" component={StudentRegistration} />
         <ProtectedRoute path="/student/:studentId" component={StudentProfile} />
         <Route path="/:rest*">
           <NotFound />

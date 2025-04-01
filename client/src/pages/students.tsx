@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { User } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { User, InsertUser, InsertStudent } from "@shared/schema";
 import { PageContainer } from "@/components/layout/page-container";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,22 +19,81 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, PlusCircle, Search, User as UserIcon, BookOpen } from "lucide-react";
+import { Loader2, PlusCircle, Search, User as UserIcon, BookOpen, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+
+// Schema for student registration form
+const studentSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  fullName: z.string().min(3, "Full name is required"),
+  email: z.string().email("Invalid email address"),
+  role: z.literal("student"),
+  grade: z.string().min(1, "Grade is required"),
+  parentName: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  dateOfBirth: z.date().optional(),
+});
+
+type StudentFormValues = z.infer<typeof studentSchema>;
 
 export default function Students() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
+  
+  const { toast } = useToast();
+  
+  const form = useForm<StudentFormValues>({
+    resolver: zodResolver(studentSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+      fullName: "",
+      email: "",
+      role: "student",
+      grade: "",
+      parentName: "",
+      phone: "",
+      address: "",
+    },
+  });
   
   const { isLoading, error, data } = useQuery({
     queryKey: ["/api/users/student"],
@@ -44,6 +103,63 @@ export default function Students() {
       return await res.json() as User[];
     }
   });
+
+  // Create student mutation
+  const createStudentMutation = useMutation({
+    mutationFn: async (data: StudentFormValues) => {
+      // First create the user
+      const userResponse = await apiRequest("POST", "/api/register", {
+        username: data.username,
+        password: data.password,
+        fullName: data.fullName,
+        email: data.email,
+        role: "student",
+        grade: data.grade,
+        joinDate: new Date().toISOString(),
+      } as InsertUser);
+      
+      if (!userResponse.ok) {
+        throw new Error("Failed to create user account");
+      }
+      
+      const user = await userResponse.json();
+      
+      // Then create the student profile
+      const studentResponse = await apiRequest("POST", "/api/students", {
+        userId: user.id,
+        parentName: data.parentName || null,
+        phone: data.phone || null,
+        address: data.address || null,
+        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toISOString() : null,
+      } as InsertStudent);
+      
+      if (!studentResponse.ok) {
+        throw new Error("Failed to create student profile");
+      }
+      
+      return await studentResponse.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Student Registration Successful",
+        description: "The student has been registered successfully.",
+      });
+      setIsRegisterDialogOpen(false);
+      form.reset();
+      queryClient.invalidateQueries({ queryKey: ["/api/users/student"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Registration Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: StudentFormValues) => {
+    createStudentMutation.mutate(data);
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -65,6 +181,8 @@ export default function Students() {
     student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const grades = ['5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
 
   return (
     <PageContainer
@@ -92,30 +210,217 @@ export default function Students() {
               />
             </div>
             
-            <Dialog>
+            <Dialog open={isRegisterDialogOpen} onOpenChange={setIsRegisterDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add Student
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Add New Student</DialogTitle>
+                  <DialogTitle>Register New Student</DialogTitle>
                   <DialogDescription>
                     Enter the student's details to add them to the system.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  {/* Form fields would go here in a real implementation */}
-                  <p className="text-sm text-gray-500">
-                    Student registration form would be implemented here.
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline">Cancel</Button>
-                  <Button type="submit">Save Student</Button>
-                </DialogFooter>
+                
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Login Information */}
+                      <FormField
+                        control={form.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter username" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              Will be used to login to the system
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="Enter password" {...field} />
+                            </FormControl>
+                            <FormDescription>
+                              Minimum 6 characters
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {/* Personal Information */}
+                      <FormField
+                        control={form.control}
+                        name="fullName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Full Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter full name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter email" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="grade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Grade</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select grade" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {grades.map((grade) => (
+                                  <SelectItem key={grade} value={grade}>
+                                    {grade}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="dateOfBirth"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Date of Birth</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                      "pl-3 text-left font-normal",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                  >
+                                    {field.value ? (
+                                      format(field.value, "PPP")
+                                    ) : (
+                                      <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value}
+                                  onSelect={field.onChange}
+                                  initialFocus
+                                  disabled={(date) => date > new Date()}
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {/* Additional Information */}
+                      <FormField
+                        control={form.control}
+                        name="parentName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Parent/Guardian Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter parent name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter phone number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="address"
+                        render={({ field }) => (
+                          <FormItem className="col-span-1 md:col-span-2">
+                            <FormLabel>Address</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter address" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsRegisterDialogOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="submit"
+                        disabled={createStudentMutation.isPending}
+                      >
+                        {createStudentMutation.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Register Student
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
               </DialogContent>
             </Dialog>
           </div>

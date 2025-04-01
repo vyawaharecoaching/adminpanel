@@ -77,14 +77,14 @@ const resultSchema = z.object({
   date: z.date({
     required_error: "Date is required",
   }),
-  maxScore: z.number().min(1, "Maximum score must be greater than 0"),
+  maxScore: z.coerce.number().min(1, "Maximum score must be greater than 0"),
 });
 
 type ResultValues = z.infer<typeof resultSchema>;
 
 // Schema for updating test results
 const updateResultSchema = z.object({
-  score: z.number().min(0, "Score must be greater than or equal to 0"),
+  score: z.coerce.number().min(0, "Score must be greater than or equal to 0"),
   status: z.enum(["pending", "graded"], {
     required_error: "Status is required",
   }),
@@ -136,11 +136,11 @@ export default function TestResultsPage() {
       let url = "/api/test-results";
       const params = new URLSearchParams();
       
-      if (selectedClass) {
+      if (selectedClass && selectedClass !== "all") {
         params.append("classId", selectedClass);
       }
       
-      if (selectedStudent) {
+      if (selectedStudent && selectedStudent !== "all") {
         params.append("studentId", selectedStudent);
       }
       
@@ -274,6 +274,52 @@ export default function TestResultsPage() {
 
   // Check if user can create/edit test results (admin or teacher)
   const canManageResults = user?.role === "admin" || user?.role === "teacher";
+
+  const onSubmitAddResult = (data: ResultValues) => {
+    // Get students in the selected class
+    const classStudents = studentsData?.filter((student: any) => 
+      student.grade === classesData?.find((c: any) => 
+        c.id.toString() === data.classId
+      )?.grade
+    );
+    
+    // Create a test result for each student in the class
+    if (classStudents && classStudents.length > 0) {
+      classStudents.forEach((student: any) => {
+        createResultMutation.mutate({
+          name: data.name,
+          classId: parseInt(data.classId),
+          studentId: student.id,
+          date: data.date.toISOString(),
+          score: 0,
+          maxScore: data.maxScore,
+          status: 'pending'
+        });
+      });
+      
+      toast({
+        title: "Test results created",
+        description: `Created ${classStudents.length} test results for students in this class.`,
+      });
+      
+      // Reset form after submission
+      resultForm.reset({
+        name: "",
+        classId: "",
+        date: new Date(),
+        maxScore: 100,
+      });
+      
+      // Switch to view tab to see results
+      setCurrentTab("view");
+    } else {
+      toast({
+        title: "No students found",
+        description: "No students were found in the selected class.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <PageContainer
@@ -460,235 +506,121 @@ export default function TestResultsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <FormLabel>Test Name</FormLabel>
-                      <Input 
-                        placeholder="e.g., Midterm Exam" 
-                        value={resultForm.watch('name')}
-                        onChange={(e) => resultForm.setValue('name', e.target.value)}
-                        className="mt-1"
+                <Form {...resultForm}>
+                  <form onSubmit={resultForm.handleSubmit(onSubmitAddResult)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={resultForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Test Name</FormLabel>
+                            <FormControl>
+                              <Input 
+                                placeholder="e.g., Midterm Exam" 
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                    </div>
-                    
-                    <div>
-                      <FormLabel>Class</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          setSelectedClass(value);
-                          resultForm.setValue('classId', value);
-                        }}
-                        value={selectedClass}
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select a class" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {grades.map((grade) => (
-                            <SelectItem key={grade} value={grade}>
-                              {grade}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <FormLabel>Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full mt-1 pl-3 text-left font-normal",
-                              !resultForm.watch('date') && "text-muted-foreground"
-                            )}
-                          >
-                            {resultForm.watch('date') ? (
-                              format(resultForm.watch('date'), "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={resultForm.watch('date')}
-                            onSelect={(date) => resultForm.setValue('date', date as Date)}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    
-                    <div>
-                      <FormLabel>Maximum Score</FormLabel>
-                      <Input 
-                        type="number" 
-                        value={resultForm.watch('maxScore')}
-                        onChange={(e) => resultForm.setValue('maxScore', Number(e.target.value))}
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                  
-                  {selectedClass && resultForm.watch('name') && resultForm.watch('date') && (
-                    <div className="mt-8">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">
-                          Student Scores for {resultForm.watch('name')}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          {format(resultForm.watch('date'), "PPP")}
-                        </p>
-                      </div>
                       
-                      {studentsLoading ? (
-                        <div className="flex justify-center py-8">
-                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        </div>
-                      ) : studentsData && studentsData.length > 0 ? (
-                        <div className="rounded-md border overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Student</TableHead>
-                                <TableHead>Score</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-20">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {studentsData.map((student: any) => {
-                                // Find if there's an existing result for this student for this test
-                                const existingResult = resultsData?.find(
-                                  (r) => r.studentId === student.id && 
-                                        r.classId === parseInt(selectedClass) &&
-                                        r.name === resultForm.watch('name') &&
-                                        format(new Date(r.date), "yyyy-MM-dd") === format(resultForm.watch('date'), "yyyy-MM-dd")
-                                );
-                                
-                                return (
-                                  <TableRow key={student.id}>
-                                    <TableCell className="font-medium">
-                                      <div className="flex items-center">
-                                        <div className="w-8 h-8 rounded-full bg-primary/10 mr-2 flex items-center justify-center text-primary">
-                                          {student.fullName?.charAt(0) || 'S'}
-                                        </div>
-                                        <div>
-                                          <p>{student.fullName}</p>
-                                          <p className="text-xs text-gray-500">ID: {student.id}</p>
-                                        </div>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center space-x-2">
-                                        <Input 
-                                          type="number" 
-                                          className="w-16" 
-                                          placeholder="0"
-                                          value={existingResult?.score || ''}
-                                          onChange={(e) => {
-                                            const score = Number(e.target.value);
-                                            // If already has result, update it
-                                            if (existingResult) {
-                                              updateResultMutation.mutate({
-                                                id: existingResult.id,
-                                                score: score,
-                                                status: existingResult.status
-                                              });
-                                            } else {
-                                              // Otherwise create new result
-                                              createResultMutation.mutate({
-                                                name: resultForm.watch('name'),
-                                                classId: parseInt(selectedClass),
-                                                studentId: student.id,
-                                                date: resultForm.watch('date') as unknown as string,
-                                                score: score,
-                                                maxScore: resultForm.watch('maxScore'),
-                                                status: 'pending'
-                                              });
-                                            }
-                                          }} 
-                                        />
-                                        <span className="text-gray-500">/ {resultForm.watch('maxScore')}</span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Select 
-                                        defaultValue={existingResult?.status || "pending"}
-                                        onValueChange={(value) => {
-                                          if (existingResult) {
-                                            updateResultMutation.mutate({
-                                              id: existingResult.id,
-                                              score: existingResult.score,
-                                              status: value
-                                            });
-                                          }
-                                        }}
-                                      >
-                                        <SelectTrigger className="w-28">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="graded">Graded</SelectItem>
-                                          <SelectItem value="pending">Pending</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </TableCell>
-                                    <TableCell>
-                                      {existingResult ? (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm"
-                                          className="text-primary"
-                                          onClick={() => openUpdateDialog(existingResult)}
-                                        >
-                                          <FileEdit className="h-4 w-4 mr-1" />
-                                          Edit
-                                        </Button>
-                                      ) : (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm"
-                                          className="text-primary"
-                                          onClick={() => {
-                                            createResultMutation.mutate({
-                                              name: resultForm.watch('name'),
-                                              classId: parseInt(selectedClass),
-                                              studentId: student.id,
-                                              date: resultForm.watch('date') as unknown as string,
-                                              score: 0,
-                                              maxScore: resultForm.watch('maxScore'),
-                                              status: 'pending'
-                                            });
-                                          }}
-                                        >
-                                          <PlusCircle className="h-4 w-4 mr-1" />
-                                          Add
-                                        </Button>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 bg-gray-50 rounded-lg border">
-                          <p className="text-gray-500 font-medium">No students found in this class.</p>
-                          <p className="text-gray-400 text-sm mt-2">Please add students to this class first.</p>
-                        </div>
-                      )}
+                      <FormField
+                        control={resultForm.control}
+                        name="classId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Class</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a class" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {classesData?.map((cls: any) => (
+                                  <SelectItem key={cls.id} value={cls.id.toString()}>
+                                    {cls.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={resultForm.control}
+                        name="date"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Date</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                      "pl-3 text-left font-normal",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                  >
+                                    {field.value ? (
+                                      format(field.value, "PPP")
+                                    ) : (
+                                      <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value}
+                                  onSelect={field.onChange}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={resultForm.control}
+                        name="maxScore"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Max Score</FormLabel>
+                            <FormControl>
+                              <Input 
+                                type="number"
+                                placeholder="e.g., 100"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
-                  )}
-                </div>
+                    
+                    <Button 
+                      type="submit"
+                      className="w-full md:w-auto"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Create Test Results for Class
+                    </Button>
+                  </form>
+                </Form>
               </CardContent>
             </Card>
           </TabsContent>
@@ -730,7 +662,6 @@ export default function TestResultsPage() {
                           <Input 
                             type="number" 
                             {...field}
-                            onChange={e => field.onChange(Number(e.target.value))}
                           />
                         </FormControl>
                         <FormMessage />
@@ -765,13 +696,7 @@ export default function TestResultsPage() {
                 </div>
                 
                 <DialogFooter>
-                  <Button 
-                    type="submit" 
-                    disabled={updateResultMutation.isPending}
-                  >
-                    {updateResultMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
+                  <Button type="submit">
                     Update Result
                   </Button>
                 </DialogFooter>

@@ -98,6 +98,8 @@ const updateInstallmentSchema = z.object({
 
 type UpdateInstallmentValues = z.infer<typeof updateInstallmentSchema>;
 
+
+
 export default function InstallmentsPage() {
   const [currentTab, setCurrentTab] = useState<string>("view");
   const [selectedStudent, setSelectedStudent] = useState<string>("");
@@ -130,11 +132,11 @@ export default function InstallmentsPage() {
       let url = "/api/installments";
       const params = new URLSearchParams();
       
-      if (selectedStudent) {
+      if (selectedStudent && selectedStudent !== "all") {
         params.append("studentId", selectedStudent);
       }
       
-      if (selectedStatus) {
+      if (selectedStatus && selectedStatus !== "all") {
         params.append("status", selectedStatus);
       }
       
@@ -146,7 +148,7 @@ export default function InstallmentsPage() {
       if (!res.ok) throw new Error("Failed to fetch installments");
       return await res.json() as Installment[];
     },
-    enabled: !!selectedStudent || !!selectedStatus,
+    enabled: true,
   });
 
   // Create installment mutation
@@ -174,7 +176,7 @@ export default function InstallmentsPage() {
 
   // Update installment mutation
   const updateInstallmentMutation = useMutation({
-    mutationFn: async ({ id, status, paymentDate }: { id: number; status: string; paymentDate?: Date }) => {
+    mutationFn: async ({ id, status, paymentDate }: { id: number; status: string; paymentDate?: string }) => {
       const res = await apiRequest("PATCH", `/api/installments/${id}`, { status, paymentDate });
       return await res.json();
     },
@@ -228,9 +230,9 @@ export default function InstallmentsPage() {
     createInstallmentMutation.mutate({
       studentId: parseInt(data.studentId),
       amount: data.amount,
-      dueDate: data.dueDate,
+      dueDate: data.dueDate.toISOString(),
       status: data.status,
-      paymentDate: data.paymentDate,
+      paymentDate: data.paymentDate ? data.paymentDate.toISOString() : undefined,
     });
   };
 
@@ -240,13 +242,14 @@ export default function InstallmentsPage() {
     updateInstallmentMutation.mutate({
       id: selectedInstallment.id,
       status: data.status,
-      paymentDate: data.paymentDate,
+      paymentDate: data.paymentDate ? data.paymentDate.toISOString() : undefined,
     });
   };
 
   const onSubmitFilter = (data: FilterValues) => {
-    setSelectedStudent(data.studentId || "");
-    setSelectedStatus(data.status || "");
+    // Use actual values for filtering
+    setSelectedStudent(data.studentId === "all" ? "all" : (data.studentId || ""));
+    setSelectedStatus(data.status === "all" ? "all" : (data.status || ""));
     refetchInstallments();
   };
 
@@ -287,7 +290,7 @@ export default function InstallmentsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "paid":
-        return <Badge variant="success">Paid</Badge>;
+        return <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-100">Paid</Badge>;
       case "pending":
         return <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100">Pending</Badge>;
       case "overdue":
@@ -344,7 +347,7 @@ export default function InstallmentsPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">All Students</SelectItem>
+                            <SelectItem value="all">All Students</SelectItem>
                             {studentsData?.map((student: any) => (
                               <SelectItem key={student.id} value={student.id.toString()}>
                                 {student.fullName}
@@ -373,7 +376,7 @@ export default function InstallmentsPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">All Statuses</SelectItem>
+                            <SelectItem value="all">All Statuses</SelectItem>
                             <SelectItem value="paid">Paid</SelectItem>
                             <SelectItem value="pending">Pending</SelectItem>
                             <SelectItem value="overdue">Overdue</SelectItem>
@@ -411,7 +414,7 @@ export default function InstallmentsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {installmentsData?.length > 0 ? (
+                      {installmentsData && installmentsData.length > 0 ? (
                         installmentsData.map((installment) => (
                           <TableRow key={installment.id}>
                             <TableCell>{installment.studentId}</TableCell>
@@ -810,7 +813,7 @@ export default function InstallmentsPage() {
                   updateInstallmentMutation.mutate({
                     id: selectedInstallment.id,
                     status: "paid",
-                    paymentDate: new Date(),
+                    paymentDate: new Date().toISOString(),
                   });
                 }}
                 disabled={updateInstallmentMutation.isPending}
