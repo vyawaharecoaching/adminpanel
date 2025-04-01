@@ -101,6 +101,21 @@ const TeachersPage = () => {
     },
   });
   
+  // Query to get classes for teachers
+  const {
+    data: classesData,
+    isLoading: isLoadingClasses,
+  } = useQuery({
+    queryKey: ["/api/classes"],
+    queryFn: async () => {
+      const res = await fetch("/api/classes");
+      if (!res.ok) {
+        throw new Error("Failed to fetch classes");
+      }
+      return await res.json();
+    },
+  });
+  
   // Filter payments for selected teacher
   const selectedTeacherPayments = selectedTeacher && teacherPayments
     ? teacherPayments.filter(payment => payment.teacherId === selectedTeacher.id)
@@ -262,6 +277,27 @@ const TeachersPage = () => {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Joined:</span>
                       <span>{teacher.joinDate ? format(new Date(teacher.joinDate), "PPP") : "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Classes:</span>
+                      <span>{(classesData?.filter((c: any) => c.teacherId === teacher.id) || []).length}</span>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <h4 className="font-medium mb-2">Payment Summary</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-green-50 p-2 rounded-md text-center">
+                          <div className="font-semibold text-green-700">
+                            {(teacherPayments?.filter(p => p.teacherId === teacher.id && p.status === 'paid') || []).length}
+                          </div>
+                          <div className="text-muted-foreground">Paid</div>
+                        </div>
+                        <div className="bg-amber-50 p-2 rounded-md text-center">
+                          <div className="font-semibold text-amber-700">
+                            {(teacherPayments?.filter(p => p.teacherId === teacher.id && p.status === 'pending') || []).length}
+                          </div>
+                          <div className="text-muted-foreground">Pending</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

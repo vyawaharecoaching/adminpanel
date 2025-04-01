@@ -140,12 +140,20 @@ export class MemStorage implements IStorage {
         role: "admin"
       });
       
-      // Create teacher user
+      // Create teacher users
       const teacherUser = await this.createUser({
         username: "teacher1",
         password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
         fullName: "Rahul Vyawahare",
         email: "rahul@vyawahare.edu",
+        role: "teacher"
+      });
+      
+      const teacherUser2 = await this.createUser({
+        username: "teacher2",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Anjali Deshmukh",
+        email: "anjali@vyawahare.edu",
         role: "teacher"
       });
       
@@ -162,6 +170,20 @@ export class MemStorage implements IStorage {
         grade: "10th",
         teacherId: teacherUser.id,
         schedule: "Tuesday, Thursday 10:30 AM - 12:00 PM"
+      });
+      
+      const class6 = await this.createClass({
+        name: "English Class 6th",
+        grade: "6th",
+        teacherId: teacherUser2.id,
+        schedule: "Monday, Wednesday 2:00 PM - 3:30 PM"
+      });
+      
+      const class9 = await this.createClass({
+        name: "History Class 9th",
+        grade: "9th",
+        teacherId: teacherUser2.id,
+        schedule: "Tuesday, Friday 1:00 PM - 2:30 PM"
       });
       
       // Create sample students
@@ -199,6 +221,42 @@ export class MemStorage implements IStorage {
         dateOfBirth: new Date("2008-07-20").toISOString()
       });
       
+      // Add more students for 6th grade
+      const student3User = await this.createUser({
+        username: "student3",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Amit Kumar",
+        email: "amit@example.com",
+        role: "student",
+        grade: "6th"
+      });
+      
+      const student3 = await this.createStudent({
+        userId: student3User.id,
+        parentName: "Rakesh Kumar",
+        phone: "9876543212",
+        address: "789 Gandhi Road, Pune",
+        dateOfBirth: new Date("2012-03-10").toISOString()
+      });
+      
+      // Add more students for 9th grade
+      const student4User = await this.createUser({
+        username: "student4",
+        password: "$2b$10$2pYXCwANWCW5gF3WZsv1ZOIUbio2emmpJlOHJvSfuW5iXSO.Z2aKe", // "admin123"
+        fullName: "Sneha Joshi",
+        email: "sneha@example.com",
+        role: "student",
+        grade: "9th"
+      });
+      
+      const student4 = await this.createStudent({
+        userId: student4User.id,
+        parentName: "Mahesh Joshi",
+        phone: "9876543213",
+        address: "321 Nehru Road, Pune",
+        dateOfBirth: new Date("2009-11-25").toISOString()
+      });
+      
       // Create sample attendance records
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
@@ -227,6 +285,36 @@ export class MemStorage implements IStorage {
         status: "present"
       });
       
+      // Add attendance records for student3 (6th grade)
+      await this.createAttendance({
+        studentId: student3User.id,
+        classId: class6.id,
+        date: yesterday.toISOString(),
+        status: "present"
+      });
+      
+      await this.createAttendance({
+        studentId: student3User.id,
+        classId: class6.id,
+        date: lastWeek.toISOString(),
+        status: "present"
+      });
+      
+      // Add attendance records for student4 (9th grade)
+      await this.createAttendance({
+        studentId: student4User.id,
+        classId: class9.id,
+        date: yesterday.toISOString(),
+        status: "absent"
+      });
+      
+      await this.createAttendance({
+        studentId: student4User.id,
+        classId: class9.id,
+        date: lastWeek.toISOString(),
+        status: "present"
+      });
+      
       // Create sample test results
       await this.createTestResult({
         name: "Midterm Math Exam",
@@ -246,6 +334,48 @@ export class MemStorage implements IStorage {
         score: 75,
         maxScore: 100,
         status: "graded"
+      });
+      
+      // Add test results for student3 (6th grade)
+      await this.createTestResult({
+        name: "English Grammar Test",
+        studentId: student3User.id,
+        classId: class6.id,
+        date: lastWeek.toISOString(),
+        score: 82,
+        maxScore: 100,
+        status: "graded"
+      });
+      
+      await this.createTestResult({
+        name: "English Vocabulary Quiz",
+        studentId: student3User.id,
+        classId: class6.id,
+        date: new Date().toISOString(),
+        score: 95,
+        maxScore: 100,
+        status: "graded"
+      });
+      
+      // Add test results for student4 (9th grade)
+      await this.createTestResult({
+        name: "History Mid-term Exam",
+        studentId: student4User.id,
+        classId: class9.id,
+        date: lastWeek.toISOString(),
+        score: 68,
+        maxScore: 100,
+        status: "graded"
+      });
+      
+      await this.createTestResult({
+        name: "Indian Freedom Fighters Quiz",
+        studentId: student4User.id,
+        classId: class9.id,
+        date: yesterday.toISOString(),
+        score: 0,
+        maxScore: 100,
+        status: "pending"
       });
       
       // Create sample installments
@@ -291,6 +421,53 @@ export class MemStorage implements IStorage {
         status: "pending"
       });
       
+      // Add installments for student3 (6th grade)
+      await this.createInstallment({
+        studentId: student3User.id,
+        amount: 4500,
+        dueDate: lastMonth.toISOString(),
+        paymentDate: lastMonth.toISOString(),
+        status: "paid"
+      });
+      
+      await this.createInstallment({
+        studentId: student3User.id,
+        amount: 4500,
+        dueDate: new Date().toISOString(),
+        paymentDate: new Date().toISOString(),
+        status: "paid"
+      });
+      
+      await this.createInstallment({
+        studentId: student3User.id,
+        amount: 4500,
+        dueDate: nextMonth.toISOString(),
+        status: "pending"
+      });
+      
+      // Add installments for student4 (9th grade)
+      await this.createInstallment({
+        studentId: student4User.id,
+        amount: 5500,
+        dueDate: lastMonth.toISOString(),
+        paymentDate: lastMonth.toISOString(),
+        status: "paid"
+      });
+      
+      await this.createInstallment({
+        studentId: student4User.id,
+        amount: 5500,
+        dueDate: new Date().toISOString(),
+        status: "overdue"
+      });
+      
+      await this.createInstallment({
+        studentId: student4User.id,
+        amount: 5500,
+        dueDate: nextMonth.toISOString(),
+        status: "pending"
+      });
+      
       // Create sample events
       const nextWeek = new Date();
       nextWeek.setDate(nextWeek.getDate() + 7);
@@ -319,6 +496,7 @@ export class MemStorage implements IStorage {
       const currentDate = new Date();
       const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
       
+      // Teacher 1 current month payment (paid)
       await this.createTeacherPayment({
         teacherId: teacherUser.id,
         amount: 25000,
@@ -328,7 +506,7 @@ export class MemStorage implements IStorage {
         status: "paid"
       });
       
-      // For next month (pending)
+      // Teacher 1 next month payment (pending)
       const nextMonthDate = new Date();
       nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
       const nextMonthString = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
@@ -338,8 +516,40 @@ export class MemStorage implements IStorage {
         amount: 25000,
         month: nextMonthString,
         description: "Monthly salary",
-        paymentDate: nextMonthDate.toISOString(),
         status: "pending"
+      });
+      
+      // Teacher 1 last month payment (paid)
+      const lastMonthDate = new Date();
+      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+      const lastMonthString = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      await this.createTeacherPayment({
+        teacherId: teacherUser.id,
+        amount: 25000,
+        month: lastMonthString,
+        description: "Monthly salary",
+        paymentDate: lastMonthDate.toISOString(),
+        status: "paid"
+      });
+      
+      // Teacher 2 current month payment (pending)
+      await this.createTeacherPayment({
+        teacherId: teacherUser2.id,
+        amount: 22000,
+        month: currentMonth,
+        description: "Monthly salary",
+        status: "pending"
+      });
+      
+      // Teacher 2 last month payment (paid)
+      await this.createTeacherPayment({
+        teacherId: teacherUser2.id,
+        amount: 22000,
+        month: lastMonthString,
+        description: "Monthly salary",
+        paymentDate: lastMonthDate.toISOString(),
+        status: "paid"
       });
     } catch (error) {
       console.error("Failed to add sample data:", error);
@@ -505,9 +715,8 @@ export class MemStorage implements IStorage {
     const id = this.currentTestResultId++;
     const result: TestResult = { 
       ...insertResult, 
-      id,
-      status: insertResult.status || "pending",
-      maxScore: insertResult.maxScore || 100
+      id, 
+      status: insertResult.status || "pending" 
     };
     this.testResults.set(id, result);
     return result;
@@ -519,8 +728,8 @@ export class MemStorage implements IStorage {
     
     const updatedResult = { 
       ...result, 
-      score, 
-      status: status as "pending" | "graded" 
+      score,
+      status: status as "pending" | "graded"
     };
     this.testResults.set(id, updatedResult);
     return updatedResult;
@@ -547,9 +756,9 @@ export class MemStorage implements IStorage {
     const id = this.currentInstallmentId++;
     const installment: Installment = { 
       ...insertInstallment, 
-      id,
-      status: insertInstallment.status || "pending",
-      paymentDate: insertInstallment.paymentDate || null
+      id, 
+      paymentDate: insertInstallment.paymentDate || null,
+      status: insertInstallment.status || "pending" 
     };
     this.installments.set(id, installment);
     return installment;
@@ -559,16 +768,10 @@ export class MemStorage implements IStorage {
     const installment = this.installments.get(id);
     if (!installment) return undefined;
     
-    // Convert Date to string for storage
-    let paymentDateStr: string | null = null;
-    if (paymentDate) {
-      paymentDateStr = paymentDate.toISOString();
-    }
-    
     const updatedInstallment = { 
       ...installment, 
       status: status as "paid" | "pending" | "overdue",
-      paymentDate: paymentDateStr
+      paymentDate: paymentDate?.toISOString() || installment.paymentDate
     };
     this.installments.set(id, updatedInstallment);
     return updatedInstallment;
@@ -587,7 +790,7 @@ export class MemStorage implements IStorage {
     const id = this.currentEventId++;
     const event: Event = { 
       ...insertEvent, 
-      id,
+      id, 
       description: insertEvent.description || null,
       time: insertEvent.time || null,
       targetGrades: insertEvent.targetGrades || null
@@ -623,9 +826,10 @@ export class MemStorage implements IStorage {
     const id = this.currentTeacherPaymentId++;
     const payment: TeacherPayment = { 
       ...insertPayment, 
-      id,
+      id, 
       description: insertPayment.description || null,
-      status: insertPayment.status || "pending"
+      paymentDate: insertPayment.paymentDate || null,
+      status: insertPayment.status || "pending" 
     };
     this.teacherPayments.set(id, payment);
     return payment;
@@ -635,16 +839,10 @@ export class MemStorage implements IStorage {
     const payment = this.teacherPayments.get(id);
     if (!payment) return undefined;
     
-    // Convert Date to string for storage if provided
-    let paymentDateStr = payment.paymentDate;
-    if (paymentDate) {
-      paymentDateStr = paymentDate.toISOString();
-    }
-    
     const updatedPayment = { 
       ...payment, 
-      status: status as "paid" | "pending",
-      paymentDate: paymentDateStr
+      status: status as "paid" | "pending" | "cancelled",
+      paymentDate: paymentDate?.toISOString() || payment.paymentDate
     };
     this.teacherPayments.set(id, updatedPayment);
     return updatedPayment;
@@ -652,23 +850,26 @@ export class MemStorage implements IStorage {
 }
 
 // Configure which storage to use
-// Set to true to use Supabase for persistence, false for in-memory storage
-const USE_SUPABASE = false; 
+// Default to in-memory storage unless specifically set to use Supabase
+// This will be set to 'false' in supabase.ts if the URL format is invalid
+const useSupabase = process.env.USE_SUPABASE !== 'false';
 
 // Export the appropriate storage implementation
-export const storage = USE_SUPABASE 
-  ? new SupabaseStorage() 
-  : new MemStorage();
+export const storage = useSupabase ? new SupabaseStorage() : new MemStorage();
 
 // Initialize Supabase connection if we're using it
-if (USE_SUPABASE) {
+if (useSupabase) {
   initSupabase()
     .then(connected => {
       if (!connected) {
         console.warn('[supabase] Failed to connect to Supabase, falling back to in-memory storage');
+        // Force usage of in-memory storage
+        process.env.USE_SUPABASE = 'false';
       }
     })
     .catch(err => {
       console.error('[supabase] Error initializing Supabase:', err);
+      // Force usage of in-memory storage
+      process.env.USE_SUPABASE = 'false';
     });
 }

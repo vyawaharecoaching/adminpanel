@@ -59,11 +59,23 @@ import { Progress } from "@/components/ui/progress";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { CalendarIcon, CheckCircle, CreditCard, Loader2, PlusCircle, Search } from "lucide-react";
+import { 
+  CalendarIcon, 
+  CheckCircle, 
+  CreditCard, 
+  Loader2, 
+  PlusCircle, 
+  Search, 
+  Bell,
+  Share2,
+  MessageSquare
+} from "lucide-react";
+import { FaWhatsapp, FaFacebook, FaTwitter, FaEnvelope, FaSms } from "react-icons/fa";
 import { format, isBefore, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
 // Schema for installments filtering
 const filterSchema = z.object({
@@ -107,6 +119,8 @@ export default function InstallmentsPage() {
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState<string>("");
   
   const { user } = useAuth();
   const { toast } = useToast();
@@ -262,13 +276,54 @@ export default function InstallmentsPage() {
     setIsUpdateDialogOpen(true);
   };
 
-  const handleMarkAsPaid = (installment: Installment) => {
+  const handleSendNotification = (installment: Installment) => {
     setSelectedInstallment(installment);
-    updateInstallmentForm.reset({
-      status: "paid",
-      paymentDate: new Date(),
-    });
-    setIsPaymentDialogOpen(true);
+    
+    // Find student details if available
+    const student = studentsData?.find((s: any) => s.id === installment.studentId);
+    const studentName = student ? student.fullName : `Student ID: ${installment.studentId}`;
+    
+    // Create pre-typed message
+    const message = `Dear ${studentName},\n\nThis is a friendly reminder that your installment of ${formatCurrency(installment.amount)} was due on ${formatDate(installment.dueDate)}.\n\nPlease arrange for payment at your earliest convenience.\n\nThank you,\nVyawahare Coaching Classes`;
+    
+    setNotificationMessage(message);
+    setIsNotificationDialogOpen(true);
+  };
+  
+  // Function to handle sharing on social media
+  const handleShare = (platform: string) => {
+    if (!selectedInstallment || !notificationMessage) return;
+    
+    let shareUrl = "";
+    
+    switch(platform) {
+      case "whatsapp":
+        shareUrl = `https://wa.me/?text=${encodeURIComponent(notificationMessage)}`;
+        break;
+      case "facebook":
+        shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}&quote=${encodeURIComponent(notificationMessage)}`;
+        break;
+      case "twitter":
+        shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(notificationMessage)}`;
+        break;
+      case "email":
+        shareUrl = `mailto:?subject=Payment Reminder&body=${encodeURIComponent(notificationMessage)}`;
+        break;
+      case "sms":
+        shareUrl = `sms:?body=${encodeURIComponent(notificationMessage)}`;
+        break;
+      default:
+        break;
+    }
+    
+    if (shareUrl) {
+      window.open(shareUrl, "_blank");
+      
+      toast({
+        title: "Notification shared",
+        description: `Payment reminder has been shared on ${platform}`,
+      });
+    }
   };
 
   // Format currency
@@ -438,10 +493,10 @@ export default function InstallmentsPage() {
                                   <Button 
                                     variant="outline" 
                                     size="sm"
-                                    onClick={() => handleMarkAsPaid(installment)}
+                                    onClick={() => handleSendNotification(installment)}
                                   >
-                                    <CreditCard className="h-4 w-4 mr-1" />
-                                    Pay
+                                    <Bell className="h-4 w-4 mr-1" />
+                                    Send Notification
                                   </Button>
                                 )}
                               </div>
@@ -824,6 +879,120 @@ export default function InstallmentsPage() {
                   <CheckCircle className="mr-2 h-4 w-4" />
                 )}
                 Confirm Payment
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      
+      {/* Notification Dialog */}
+      {selectedInstallment && (
+        <Dialog open={isNotificationDialogOpen} onOpenChange={setIsNotificationDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Send Payment Reminder</DialogTitle>
+              <DialogDescription>
+                Send a payment reminder for this installment via social media or other messaging channels.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Student ID</h4>
+                  <p className="text-sm">{selectedInstallment.studentId}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Amount</h4>
+                  <p className="text-lg font-semibold">{formatCurrency(selectedInstallment.amount)}</p>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium mb-1">Due Date</h4>
+                <p className="text-sm">{formatDate(selectedInstallment.dueDate)}</p>
+              </div>
+              
+              <div className="mt-2">
+                <h4 className="text-sm font-medium mb-2">Message</h4>
+                <Textarea 
+                  value={notificationMessage}
+                  onChange={(e) => setNotificationMessage(e.target.value)}
+                  className="h-32 resize-none"
+                />
+              </div>
+            </div>
+            
+            <div className="mt-2">
+              <h4 className="text-sm font-medium mb-3">Share via</h4>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
+                  onClick={() => handleShare("whatsapp")}
+                >
+                  <FaWhatsapp size={20} />
+                  WhatsApp
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                  onClick={() => handleShare("facebook")}
+                >
+                  <FaFacebook size={20} />
+                  Facebook
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200"
+                  onClick={() => handleShare("twitter")}
+                >
+                  <FaTwitter size={20} />
+                  Twitter
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+                  onClick={() => handleShare("email")}
+                >
+                  <FaEnvelope size={20} />
+                  Email
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                  onClick={() => handleShare("sms")}
+                >
+                  <FaSms size={20} />
+                  SMS
+                </Button>
+              </div>
+            </div>
+            
+            <DialogFooter className="mt-6">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsNotificationDialogOpen(false)}
+              >
+                Close
+              </Button>
+              <Button 
+                type="button"
+                onClick={() => {
+                  toast({
+                    title: "Notification prepared",
+                    description: "Choose a messaging platform to send the notification.",
+                  });
+                }}
+              >
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Send Directly
               </Button>
             </DialogFooter>
           </DialogContent>
