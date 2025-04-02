@@ -106,6 +106,7 @@ const PublicationNotesPage = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditStockDialogOpen, setIsEditStockDialogOpen] = useState(false);
   const [isDistributionDialogOpen, setIsDistributionDialogOpen] = useState(false);
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   
   // Query to get all publication notes
   const { data: notes, isLoading } = useQuery<PublicationNote[]>({
@@ -722,6 +723,46 @@ const PublicationNotesPage = () => {
             </TabsList>
             
             <TabsContent value="assigned">
+              <div className="mb-4 flex items-center">
+                <div className="mr-4">
+                  <p className="text-sm font-medium mb-1">Filter by Subject:</p>
+                  <Select 
+                    onValueChange={(value) => setSubjectFilter(value === "all" ? null : value)} 
+                    defaultValue="all"
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Subjects" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Subjects</SelectItem>
+                      <SelectItem value="Mathematics">Mathematics</SelectItem>
+                      <SelectItem value="Science">Science</SelectItem>
+                      <SelectItem value="Physics">Physics</SelectItem>
+                      <SelectItem value="Chemistry">Chemistry</SelectItem>
+                      <SelectItem value="Biology">Biology</SelectItem>
+                      <SelectItem value="English">English</SelectItem>
+                      <SelectItem value="Hindi">Hindi</SelectItem>
+                      <SelectItem value="History">History</SelectItem>
+                      <SelectItem value="Geography">Geography</SelectItem>
+                      <SelectItem value="Computer Science">Computer Science</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex-1"></div>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-1"
+                  onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/student-notes'] });
+                  }}
+                >
+                  <RefreshCcw className="mr-1 h-3 w-3" /> Refresh
+                </Button>
+              </div>
+              
               {isStudentNotesLoading ? (
                 <div className="flex justify-center items-center py-8">
                   <RefreshCcw className="h-6 w-6 animate-spin text-primary" />
@@ -740,40 +781,49 @@ const PublicationNotesPage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {studentNotes.map((note) => (
-                        <TableRow key={note.id}>
-                          <TableCell>{getStudentName(note.studentId)}</TableCell>
-                          <TableCell>{formatDate(note.dateIssued)}</TableCell>
-                          <TableCell>
-                            {note.isReturned ? (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                <Check className="mr-1 h-3 w-3" /> Returned {note.returnDate ? `(${formatDate(note.returnDate)})` : ''}
+                      {studentNotes
+                        .filter(note => {
+                          // Only filter if a subject filter is selected
+                          if (!subjectFilter) return true;
+                          
+                          // Find the publication note for this student note to check its subject
+                          const publicationNote = notes?.find(n => n.id === note.noteId);
+                          return publicationNote?.subject === subjectFilter;
+                        })
+                        .map((note) => (
+                          <TableRow key={note.id}>
+                            <TableCell>{getStudentName(note.studentId)}</TableCell>
+                            <TableCell>{formatDate(note.dateIssued)}</TableCell>
+                            <TableCell>
+                              {note.isReturned ? (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                  <Check className="mr-1 h-3 w-3" /> Returned {note.returnDate ? `(${formatDate(note.returnDate)})` : ''}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                  <BookOpen className="mr-1 h-3 w-3" /> Issued
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={`bg-${getConditionColor(note.condition)}-50 text-${getConditionColor(note.condition)}-700 border-${getConditionColor(note.condition)}-200`}>
+                                {note.condition || "Unknown"}
                               </Badge>
-                            ) : (
-                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                <BookOpen className="mr-1 h-3 w-3" /> Issued
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={`bg-${getConditionColor(note.condition)}-50 text-${getConditionColor(note.condition)}-700 border-${getConditionColor(note.condition)}-200`}>
-                              {note.condition || "Unknown"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-[200px] truncate">{note.notes || "-"}</TableCell>
-                          <TableCell>
-                            {!note.isReturned && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMarkAsReturned(note.id, note.condition || "good")}
-                              >
-                                Mark as Returned
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate">{note.notes || "-"}</TableCell>
+                            <TableCell>
+                              {!note.isReturned && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMarkAsReturned(note.id, note.condition || "good")}
+                                >
+                                  Mark as Returned
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
                     </TableBody>
                   </Table>
                 </ScrollArea>

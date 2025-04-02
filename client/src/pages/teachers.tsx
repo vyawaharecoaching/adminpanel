@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageContainer } from "@/components/layout/page-container";
 
 type Teacher = User & { role: "teacher" };
 
@@ -96,19 +97,15 @@ const TeachersPage = () => {
   }
 
   return (
-    <div className="container py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Users className="h-6 w-6" />
-          <h1 className="text-3xl font-bold">Teachers Management</h1>
-        </div>
-      </div>
-
+    <PageContainer
+      title="Teachers Management"
+      subtitle="Manage and view all teachers at Vyawahare Coaching Classes"
+    >
       {/* List View */}
       <Card>
         <CardHeader>
           <CardTitle>All Teachers</CardTitle>
-          <CardDescription>Manage and view all teachers at Vyawahare Coaching Classes</CardDescription>
+          <CardDescription>View detailed information about teachers</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -173,7 +170,7 @@ const TeachersPage = () => {
           </Card>
         ))}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

@@ -87,6 +87,31 @@ CREATE TABLE IF NOT EXISTS public.teacher_payments (
     status VARCHAR(50) NOT NULL CHECK (status IN ('paid', 'pending'))
 );
 
+-- Publication Notes table (for tracking educational materials inventory)
+CREATE TABLE IF NOT EXISTS public.publication_notes (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    subject VARCHAR(100) NOT NULL,
+    grade VARCHAR(50) NOT NULL,
+    total_stock INTEGER NOT NULL DEFAULT 0,
+    available_stock INTEGER NOT NULL DEFAULT 0,
+    low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+    last_restocked DATE NULL,
+    description TEXT NULL
+);
+
+-- Student Notes table (for tracking which student has which publications)
+CREATE TABLE IF NOT EXISTS public.student_notes (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES public.users(id),
+    note_id INTEGER NOT NULL REFERENCES public.publication_notes(id),
+    date_issued DATE NOT NULL,
+    is_returned BOOLEAN NOT NULL DEFAULT false,
+    return_date DATE NULL,
+    condition VARCHAR(50) NULL CHECK (condition IN ('excellent', 'good', 'fair', 'poor')),
+    notes TEXT NULL
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
 CREATE INDEX IF NOT EXISTS idx_students_user_id ON public.students(user_id);
@@ -102,6 +127,11 @@ CREATE INDEX IF NOT EXISTS idx_events_date ON public.events(date);
 CREATE INDEX IF NOT EXISTS idx_teacher_payments_teacher_id ON public.teacher_payments(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_payments_month ON public.teacher_payments(month);
 CREATE INDEX IF NOT EXISTS idx_teacher_payments_status ON public.teacher_payments(status);
+CREATE INDEX IF NOT EXISTS idx_publication_notes_subject ON public.publication_notes(subject);
+CREATE INDEX IF NOT EXISTS idx_publication_notes_grade ON public.publication_notes(grade);
+CREATE INDEX IF NOT EXISTS idx_student_notes_student_id ON public.student_notes(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_notes_note_id ON public.student_notes(note_id);
+CREATE INDEX IF NOT EXISTS idx_student_notes_is_returned ON public.student_notes(is_returned);
 
 -- Grant permissions (adjust as needed based on your security requirements)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -112,5 +142,7 @@ ALTER TABLE public.test_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.installments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.teacher_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.publication_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.student_notes ENABLE ROW LEVEL SECURITY;
 
 -- Sample data insertion would go here, but we'll keep the data in the application for now
