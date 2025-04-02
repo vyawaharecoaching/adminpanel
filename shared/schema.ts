@@ -21,6 +21,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   role: true,
   grade: true,
+  joinDate: true,
 });
 
 // Students model for detailed student information

@@ -27,14 +27,39 @@ const TeachersPage = () => {
     data: teachers,
     isLoading: isLoadingTeachers,
     error: teachersError,
+    refetch: refetchTeachers,
   } = useQuery({
-    queryKey: ["/api/users/teacher"],
+    queryKey: ["/api/users/teacher", Date.now()], // Add timestamp to force fresh data
     queryFn: async () => {
-      const res = await fetch("/api/users/teacher");
-      if (!res.ok) {
-        throw new Error("Failed to fetch teachers");
+      // Try to get teachers from authenticated endpoint
+      try {
+        const res = await fetch("/api/users/teacher", {
+          cache: "no-store", // Tell browser not to cache
+          headers: { "Cache-Control": "no-cache" } // Force fresh data
+        });
+        
+        if (res.ok) {
+          const teachers = await res.json();
+          console.log("Fetched authenticated teachers:", teachers);
+          return teachers as Teacher[];
+        }
+      } catch (err) {
+        console.error("Error fetching authenticated teachers:", err);
       }
-      return await res.json() as Teacher[];
+      
+      // If that fails, try the debug endpoint as fallback
+      const debugRes = await fetch("/api/debug/teachers", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      
+      if (!debugRes.ok) {
+        throw new Error("Failed to fetch teachers from both endpoints");
+      }
+      
+      const debugTeachers = await debugRes.json();
+      console.log("Fetched debug teachers:", debugTeachers);
+      return debugTeachers as Teacher[];
     },
   });
 

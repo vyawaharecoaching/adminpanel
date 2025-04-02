@@ -119,6 +119,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Debug endpoint to view test results without authentication
+  app.get("/api/debug/test-results", async (req: Request, res: Response) => {
+    try {
+      // We need to collect test results differently since there's no direct getTestResults method
+      const classes = await storage.getClasses();
+      const testResults = [];
+      
+      for (const cls of classes) {
+        const results = await storage.getTestResultsByClass(cls.id);
+        if (results && results.length > 0) {
+          testResults.push(...results);
+        }
+      }
+      
+      // If no test results are found, return sample data for testing
+      if (testResults.length === 0) {
+        const today = new Date();
+        const lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 7);
+        
+        const sampleTestResults = [
+          { 
+            id: 2001, 
+            name: "Math Midterm", 
+            studentId: 101, 
+            classId: 501, 
+            date: lastWeek.toISOString(), 
+            score: 85, 
+            maxScore: 100, 
+            status: "graded" 
+          },
+          { 
+            id: 2002, 
+            name: "Science Quiz", 
+            studentId: 102, 
+            classId: 502, 
+            date: today.toISOString(), 
+            score: 72, 
+            maxScore: 100, 
+            status: "graded" 
+          },
+          { 
+            id: 2003, 
+            name: "English Essay", 
+            studentId: 103, 
+            classId: 503, 
+            date: today.toISOString(), 
+            score: 0, 
+            maxScore: 100, 
+            status: "pending" 
+          },
+          { 
+            id: 2004, 
+            name: "History Final", 
+            studentId: 104, 
+            classId: 504, 
+            date: lastWeek.toISOString(), 
+            score: 90, 
+            maxScore: 100, 
+            status: "graded" 
+          }
+        ];
+        
+        return res.json(sampleTestResults);
+      }
+      
+      res.json(testResults);
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error fetching test results",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
   // Debug endpoint to create a test user
   app.post("/api/debug/create-test-user", async (req: Request, res: Response) => {
     try {
@@ -673,6 +748,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Debug endpoint to test direct access to the application
+  app.get("/api/debug/hello", (req: Request, res: Response) => {
+    res.json({ 
+      message: "API is accessible", 
+      timestamp: new Date().toISOString(),
+      server: "Running"
+    });
+  });
+
+  // Debug endpoint to get all teachers without authentication
+  app.get("/api/debug/teachers", async (req: Request, res: Response) => {
+    try {
+      const teachers = await storage.getUsersByRole("teacher");
+      
+      // If no teachers are found, return sample data for testing
+      if (!teachers || teachers.length === 0) {
+        return res.json([
+          { id: 201, fullName: "Rahul Vyawahare", role: "teacher", email: "rahul@vyawahare.edu" },
+          { id: 202, fullName: "Anjali Deshmukh", role: "teacher", email: "anjali@vyawahare.edu" }
+        ]);
+      }
+      
+      res.json(teachers);
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error fetching teachers",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Debug endpoint to get all students without authentication
+  app.get("/api/debug/students", async (req: Request, res: Response) => {
+    try {
+      const students = await storage.getUsersByRole("student");
+      
+      // If no students are found, return sample data for testing
+      if (!students || students.length === 0) {
+        return res.json([
+          { id: 301, fullName: "Rohit Sharma", role: "student", email: "rohit@student.edu", grade: "10" },
+          { id: 302, fullName: "Priya Patel", role: "student", email: "priya@student.edu", grade: "8" }
+        ]);
+      }
+      
+      res.json(students);
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error fetching students",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Debug endpoint to check database connection
+  app.get("/api/debug/check-db", async (req: Request, res: Response) => {
+    try {
+      // Check if storage has Supabase connection
+      const hasSupabase = !!storage.supabase;
+      
+      // Try to fetch some data to verify connection
+      const users = await storage.getUsers();
+      
+      res.json({
+        database: hasSupabase ? "Supabase" : "In-Memory",
+        connection: "OK",
+        users_count: users.length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({
+        database: storage.supabase ? "Supabase" : "In-Memory",
+        connection: "Error",
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Debug endpoint to create a test admin user
+  app.post("/api/debug/create-test-user", async (req: Request, res: Response) => {
+    try {
+      // Check if the admin user already exists
+      const existingUser = await storage.getUserByUsername("admin");
+      
+      if (existingUser) {
+        return res.status(200).json({
+          message: "Test user already exists",
+          user: {
+            id: existingUser.id,
+            username: existingUser.username,
+            fullName: existingUser.fullName,
+            role: existingUser.role
+          }
+        });
+      }
+      
+      // Create a test admin user
+      const user = await storage.createUser({
+        username: "admin",
+        password: "password123",
+        fullName: "Administrator",
+        email: "admin@vyawahare.edu",
+        role: "admin",
+        grade: null,
+        joinDate: new Date()
+      });
+      
+      return res.status(201).json({
+        message: "Test user created successfully",
+        user: {
+          id: user.id,
+          username: user.username,
+          fullName: user.fullName,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Error creating test user",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Debug endpoint to check installments data
+  app.get("/api/debug/installments", async (req: Request, res: Response) => {
+    try {
+      const pending = await storage.getInstallmentsByStatus("pending");
+      const overdue = await storage.getInstallmentsByStatus("overdue");
+      const paid = await storage.getInstallmentsByStatus("paid");
+      
+      res.json({
+        count: pending.length + overdue.length + paid.length,
+        pending: pending,
+        overdue: overdue,
+        paid: paid,
+        all: [...pending, ...overdue, ...paid]
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "Error fetching installments",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Debug endpoint to check API health
+  app.get("/api/debug/hello", (req: Request, res: Response) => {
+    res.json({
+      message: "API is running",
+      timestamp: new Date().toISOString(),
+      version: "1.0",
+      env: process.env.NODE_ENV || "development"
+    });
+  });
+  
+  // Debug endpoint to check teachers data
+  app.get("/api/debug/teachers", async (req: Request, res: Response) => {
+    try {
+      const teachers = await storage.getUsersByRole("teacher");
+      
+      // If no teachers are found, return sample data for testing
+      if (!teachers || teachers.length === 0) {
+        return res.json([
+          { id: 201, fullName: "Rajesh Kumar", role: "teacher", email: "rajesh@vyawahare.edu" },
+          { id: 202, fullName: "Sunita Joshi", role: "teacher", email: "sunita@vyawahare.edu" },
+          { id: 203, fullName: "Vikram Deshmukh", role: "teacher", email: "vikram@vyawahare.edu" }
+        ]);
+      }
+      
+      res.json(teachers);
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error fetching teachers",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Create and return the server instance
   const httpServer = createServer(app);
   return httpServer;

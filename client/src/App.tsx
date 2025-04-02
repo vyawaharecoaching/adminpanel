@@ -11,6 +11,7 @@ import Installments from "@/pages/installments";
 import Reports from "@/pages/reports";
 import AccountSettings from "@/pages/account-settings";
 import StudentProfile from "@/pages/student-profile";
+import DebugPage from "@/pages/debug-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 
@@ -20,6 +21,9 @@ const AppRoutes = () => {
       <Switch>
         <Route path="/auth">
           <AuthPage />
+        </Route>
+        <Route path="/debug">
+          <DebugPage />
         </Route>
         <ProtectedRoute path="/" component={Dashboard} />
         <ProtectedRoute path="/students" component={Students} />

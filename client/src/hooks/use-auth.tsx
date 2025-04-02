@@ -40,16 +40,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      // First set the query data
       queryClient.setQueryData(["/api/user"], user);
+      
+      // Then invalidate all cached queries to force a refresh
+      queryClient.invalidateQueries();
+      
+      // Show success toast
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.fullName}!`,
       });
       
-      // Redirect to dashboard immediately after login
-      if (location === "/auth") {
+      // Force immediate redirect to dashboard
+      setTimeout(() => {
         navigate("/");
-      }
+      }, 100);
     },
     onError: (error: Error) => {
       toast({
@@ -66,16 +72,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      // First set the query data
       queryClient.setQueryData(["/api/user"], user);
+      
+      // Then invalidate all cached queries to force a refresh
+      queryClient.invalidateQueries();
+      
       toast({
         title: "Registration successful",
         description: `Welcome to Vyawahare Coaching Classes, ${user.fullName}!`,
       });
       
-      // Redirect to dashboard immediately after registration
-      if (location === "/auth") {
+      // Force immediate redirect to dashboard
+      setTimeout(() => {
         navigate("/");
-      }
+      }, 100);
     },
     onError: (error: Error) => {
       toast({
