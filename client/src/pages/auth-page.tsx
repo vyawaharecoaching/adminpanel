@@ -49,6 +49,8 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation, isLoading } = useAuth();
 
   // If the user is already logged in, redirect to dashboard
+  // The loginMutation and registerMutation also handle redirect now,
+  // but we keep this for users who are already logged in when visiting /auth
   useEffect(() => {
     if (user) {
       navigate("/");

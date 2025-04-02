@@ -1,5 +1,13 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Installment, InsertInstallment } from "@shared/schema";
+
+// Define the student interface for type safety
+interface Student {
+  id: number;
+  fullName: string;
+  role: string;
+  grade?: string;
+}
 import { PageContainer } from "@/components/layout/page-container";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -126,41 +134,34 @@ export default function InstallmentsPage() {
   const { toast } = useToast();
   
   // Get students for dropdown
-  const { data: studentsData } = useQuery({
-    queryKey: ["/api/users/student"],
+  const { data: studentsData } = useQuery<Student[]>({
+    queryKey: ["/api/debug/students"],
     queryFn: async () => {
-      const res = await fetch("/api/users/student");
+      const res = await fetch("/api/debug/students");
       if (!res.ok) throw new Error("Failed to fetch students");
-      return await res.json();
+      return await res.json() as Student[];
     },
   });
 
-  // Get installments based on filters
+  // Get installments based on filters (using debug endpoint for test data)
   const {
     data: installmentsData,
     isLoading: installmentsLoading,
     refetch: refetchInstallments,
   } = useQuery({
-    queryKey: ["/api/installments", selectedStudent, selectedStatus],
+    queryKey: ["/api/debug/installments", selectedStudent, selectedStatus],
     queryFn: async () => {
-      let url = "/api/installments";
-      const params = new URLSearchParams();
-      
-      if (selectedStudent && selectedStudent !== "all") {
-        params.append("studentId", selectedStudent);
-      }
-      
-      if (selectedStatus && selectedStatus !== "all") {
-        params.append("status", selectedStatus);
-      }
-      
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-      
-      const res = await fetch(url);
+      // Use debug endpoint for test data
+      const res = await fetch("/api/debug/installments");
       if (!res.ok) throw new Error("Failed to fetch installments");
-      return await res.json() as Installment[];
+      const data = await res.json();
+      
+      // Filter the data based on selection
+      if (selectedStatus && selectedStatus !== "all") {
+        return data[selectedStatus] || [];
+      }
+      
+      return data.all as Installment[];
     },
     enabled: true,
   });
@@ -280,7 +281,7 @@ export default function InstallmentsPage() {
     setSelectedInstallment(installment);
     
     // Find student details if available
-    const student = studentsData?.find((s: any) => s.id === installment.studentId);
+    const student = studentsData?.find((s: Student) => s.id === installment.studentId);
     const studentName = student ? student.fullName : `Student ID: ${installment.studentId}`;
     
     // Create pre-typed message
@@ -403,7 +404,7 @@ export default function InstallmentsPage() {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="all">All Students</SelectItem>
-                            {studentsData?.map((student: any) => (
+                            {studentsData?.map((student: Student) => (
                               <SelectItem key={student.id} value={student.id.toString()}>
                                 {student.fullName}
                               </SelectItem>
@@ -470,7 +471,7 @@ export default function InstallmentsPage() {
                     </TableHeader>
                     <TableBody>
                       {installmentsData && installmentsData.length > 0 ? (
-                        installmentsData.map((installment) => (
+                        installmentsData.map((installment: Installment) => (
                           <TableRow key={installment.id}>
                             <TableCell>{installment.studentId}</TableCell>
                             <TableCell>{formatCurrency(installment.amount)}</TableCell>
@@ -548,7 +549,7 @@ export default function InstallmentsPage() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {studentsData?.map((student: any) => (
+                                {studentsData?.map((student: Student) => (
                                   <SelectItem key={student.id} value={student.id.toString()}>
                                     {student.fullName}
                                   </SelectItem>

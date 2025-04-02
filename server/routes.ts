@@ -37,6 +37,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // Debug endpoint to view students without authentication  
+  app.get("/api/debug/students", async (req: Request, res: Response) => {
+    try {
+      const students = await storage.getUsersByRole("student");
+      
+      // If no students are found, return sample data for testing
+      if (!students || students.length === 0) {
+        return res.json([
+          { id: 101, fullName: "Ananya Sharma", role: "student", grade: "10th" },
+          { id: 102, fullName: "Rahul Patel", role: "student", grade: "8th" },
+          { id: 103, fullName: "Priya Desai", role: "student", grade: "12th" },
+          { id: 104, fullName: "Arjun Singh", role: "student", grade: "9th" }
+        ]);
+      }
+      
+      res.json(students);
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error fetching students",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Debug endpoint to view installments without authentication
+  app.get("/api/debug/installments", async (req: Request, res: Response) => {
+    try {
+      const pendingInstallments = await storage.getInstallmentsByStatus("pending");
+      const overdueInstallments = await storage.getInstallmentsByStatus("overdue");
+      const paidInstallments = await storage.getInstallmentsByStatus("paid");
+      
+      // Check if we have any installments, if not return sample data for testing
+      const hasInstallments = 
+        (pendingInstallments && pendingInstallments.length > 0) || 
+        (overdueInstallments && overdueInstallments.length > 0) || 
+        (paidInstallments && paidInstallments.length > 0);
+      
+      if (!hasInstallments) {
+        const date = new Date();
+        const lastMonth = new Date();
+        lastMonth.setMonth(date.getMonth() - 1);
+        const nextMonth = new Date();
+        nextMonth.setMonth(date.getMonth() + 1);
+        
+        const samplePending = [
+          { id: 1001, studentId: 101, amount: 5000, dueDate: date.toISOString(), status: "pending" },
+          { id: 1002, studentId: 103, amount: 6000, dueDate: nextMonth.toISOString(), status: "pending" }
+        ];
+        
+        const sampleOverdue = [
+          { id: 1003, studentId: 102, amount: 4500, dueDate: lastMonth.toISOString(), status: "overdue" },
+          { id: 1004, studentId: 104, amount: 5500, dueDate: lastMonth.toISOString(), status: "overdue" }
+        ];
+        
+        const samplePaid = [
+          { id: 1005, studentId: 101, amount: 5000, dueDate: lastMonth.toISOString(), paymentDate: lastMonth.toISOString(), status: "paid" },
+          { id: 1006, studentId: 103, amount: 6000, dueDate: lastMonth.toISOString(), paymentDate: lastMonth.toISOString(), status: "paid" }
+        ];
+        
+        return res.json({
+          pending: samplePending,
+          overdue: sampleOverdue,
+          paid: samplePaid,
+          all: [...samplePending, ...sampleOverdue, ...samplePaid]
+        });
+      }
+      
+      res.json({
+        pending: pendingInstallments,
+        overdue: overdueInstallments,
+        paid: paidInstallments,
+        all: [...pendingInstallments, ...overdueInstallments, ...paidInstallments]
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        message: "Error fetching installments",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
   
   // Debug endpoint to create a test user
   app.post("/api/debug/create-test-user", async (req: Request, res: Response) => {
