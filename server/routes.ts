@@ -9,7 +9,9 @@ import {
   insertTestResultSchema, 
   insertInstallmentSchema, 
   insertEventSchema,
-  insertTeacherPaymentSchema
+  insertTeacherPaymentSchema,
+  insertPublicationNoteSchema,
+  insertStudentNoteSchema
 } from "@shared/schema";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -922,6 +924,372 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       res.status(500).json({ 
         message: "Error fetching teachers",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Publication Notes routes
+  app.get("/api/publication-notes", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const subject = req.query.subject as string;
+      const grade = req.query.grade as string;
+      const lowStock = req.query.lowStock === 'true';
+      
+      if (subject) {
+        const notes = await storage.getPublicationNotesBySubject(subject);
+        return res.json(notes);
+      } else if (grade) {
+        const notes = await storage.getPublicationNotesByGrade(grade);
+        return res.json(notes);
+      } else if (lowStock) {
+        const notes = await storage.getLowStockPublicationNotes();
+        return res.json(notes);
+      } else {
+        const notes = await storage.getPublicationNotes();
+        return res.json(notes);
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/publication-notes/:id", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const id = parseInt(req.params.id, 10);
+      const note = await storage.getPublicationNote(id);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Publication note not found" });
+      }
+      
+      res.json(note);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/publication-notes", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated() || req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const validatedData = insertPublicationNoteSchema.parse(req.body);
+      const note = await storage.createPublicationNote(validatedData);
+      res.status(201).json(note);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/publication-notes/:id/stock", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated() || req.user?.role !== "admin") {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const id = parseInt(req.params.id, 10);
+      const { totalStock, availableStock } = req.body;
+      
+      if (typeof totalStock !== 'number' || typeof availableStock !== 'number') {
+        return res.status(400).json({ message: "Invalid stock values" });
+      }
+      
+      const updatedNote = await storage.updatePublicationNoteStock(id, totalStock, availableStock);
+      
+      if (!updatedNote) {
+        return res.status(404).json({ message: "Publication note not found" });
+      }
+      
+      res.json(updatedNote);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Student Notes routes
+  app.get("/api/student-notes", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const studentId = req.query.studentId ? parseInt(req.query.studentId as string, 10) : undefined;
+      const noteId = req.query.noteId ? parseInt(req.query.noteId as string, 10) : undefined;
+      
+      if (studentId) {
+        const notes = await storage.getStudentNotesByStudent(studentId);
+        return res.json(notes);
+      } else if (noteId) {
+        const notes = await storage.getStudentNotesByNote(noteId);
+        return res.json(notes);
+      } else {
+        return res.status(400).json({ message: "Missing query parameters" });
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/student-notes/:id", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const id = parseInt(req.params.id, 10);
+      const note = await storage.getStudentNote(id);
+      
+      if (!note) {
+        return res.status(404).json({ message: "Student note not found" });
+      }
+      
+      res.json(note);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/student-notes", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated() || (req.user?.role !== "admin" && req.user?.role !== "teacher")) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const validatedData = insertStudentNoteSchema.parse(req.body);
+      const note = await storage.createStudentNote(validatedData);
+      res.status(201).json(note);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/student-notes/:id/status", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.isAuthenticated() || (req.user?.role !== "admin" && req.user?.role !== "teacher")) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const id = parseInt(req.params.id, 10);
+      const { isReturned, returnDate, condition } = req.body;
+      
+      if (typeof isReturned !== 'boolean') {
+        return res.status(400).json({ message: "Invalid isReturned value" });
+      }
+      
+      let returnDateObj = undefined;
+      if (returnDate) {
+        returnDateObj = new Date(returnDate);
+        if (isNaN(returnDateObj.getTime())) {
+          return res.status(400).json({ message: "Invalid return date" });
+        }
+      }
+      
+      const validConditions = ["excellent", "good", "fair", "poor"];
+      if (condition && !validConditions.includes(condition)) {
+        return res.status(400).json({ message: "Invalid condition value" });
+      }
+      
+      const updatedNote = await storage.updateStudentNoteStatus(id, isReturned, returnDateObj, condition);
+      
+      if (!updatedNote) {
+        return res.status(404).json({ message: "Student note not found" });
+      }
+      
+      res.json(updatedNote);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Debug endpoint for publication notes
+  app.get("/api/debug/publication-notes", async (req: Request, res: Response) => {
+    try {
+      const notes = await storage.getPublicationNotes();
+      
+      // If no publication notes found, return sample data
+      if (!notes || notes.length === 0) {
+        const sampleNotes = [
+          {
+            id: 1,
+            title: "Mathematics for 10th Standard",
+            subject: "Mathematics",
+            grade: "10th",
+            totalStock: 50,
+            availableStock: 35,
+            lowStockThreshold: 10,
+            lastRestocked: new Date().toISOString(),
+            description: "Comprehensive math workbook covering algebra, geometry, and trigonometry"
+          },
+          {
+            id: 2,
+            title: "Science Fundamentals Grade 8",
+            subject: "Science",
+            grade: "8th",
+            totalStock: 40,
+            availableStock: 8,
+            lowStockThreshold: 10,
+            lastRestocked: new Date().toISOString(),
+            description: "Covers basic physics, chemistry and biology concepts"
+          },
+          {
+            id: 3,
+            title: "English Grammar & Composition",
+            subject: "English",
+            grade: "9th",
+            totalStock: 60,
+            availableStock: 12,
+            lowStockThreshold: 15,
+            lastRestocked: new Date().toISOString(),
+            description: "Grammar rules, essay writing and literary analysis"
+          },
+          {
+            id: 4,
+            title: "History of Modern India",
+            subject: "History",
+            grade: "11th",
+            totalStock: 30,
+            availableStock: 2,
+            lowStockThreshold: 5,
+            lastRestocked: new Date().toISOString(),
+            description: "Comprehensive coverage of Indian independence movement"
+          }
+        ];
+        
+        return res.json(sampleNotes);
+      }
+      
+      res.json(notes);
+    } catch (error) {
+      console.error('Error fetching publication notes:', error);
+      res.status(500).json({ 
+        message: "Error fetching publication notes",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Debug endpoint for student notes
+  app.get("/api/debug/student-notes", async (req: Request, res: Response) => {
+    try {
+      // Get all publication notes
+      const pubNotes = await storage.getPublicationNotes();
+      
+      // If no publication notes, use the sample ones
+      let notesList = pubNotes;
+      if (!pubNotes || pubNotes.length === 0) {
+        notesList = [
+          {
+            id: 1,
+            title: "Mathematics for 10th Standard",
+            subject: "Mathematics",
+            grade: "10th",
+            totalStock: 50,
+            availableStock: 35,
+            lowStockThreshold: 10,
+            lastRestocked: new Date().toISOString(),
+            description: "Comprehensive math workbook"
+          },
+          {
+            id: 2,
+            title: "Science Fundamentals Grade 8",
+            subject: "Science",
+            grade: "8th",
+            totalStock: 40,
+            availableStock: 8,
+            lowStockThreshold: 10,
+            lastRestocked: new Date().toISOString(),
+            description: "Covers basic science concepts"
+          }
+        ];
+      }
+      
+      // Get list of students
+      const students = await storage.getUsersByRole("student");
+      
+      // If no students, use sample ones
+      let studentsList = students;
+      if (!students || students.length === 0) {
+        studentsList = [
+          { id: 101, fullName: "Ananya Sharma", role: "student" },
+          { id: 102, fullName: "Rahul Patel", role: "student" },
+          { id: 103, fullName: "Priya Desai", role: "student" }
+        ];
+      }
+      
+      // Get actual student notes
+      const studentNotes = [];
+      for (const student of studentsList) {
+        const notes = await storage.getStudentNotesByStudent(student.id);
+        if (notes && notes.length > 0) {
+          studentNotes.push(...notes);
+        }
+      }
+      
+      // If no student notes found, return sample data
+      if (studentNotes.length === 0) {
+        const today = new Date();
+        const lastMonth = new Date();
+        lastMonth.setMonth(today.getMonth() - 1);
+        
+        const sampleStudentNotes = [
+          {
+            id: 1,
+            studentId: studentsList[0].id,
+            noteId: notesList[0].id,
+            dateIssued: lastMonth.toISOString(),
+            isReturned: false,
+            returnDate: null,
+            condition: "good",
+            notes: "Issued for the semester"
+          },
+          {
+            id: 2,
+            studentId: studentsList[1].id,
+            noteId: notesList[1].id,
+            dateIssued: lastMonth.toISOString(),
+            isReturned: true,
+            returnDate: today.toISOString(),
+            condition: "fair",
+            notes: "Some pages are torn"
+          },
+          {
+            id: 3,
+            studentId: studentsList[2].id,
+            noteId: notesList[0].id,
+            dateIssued: today.toISOString(),
+            isReturned: false,
+            returnDate: null,
+            condition: "good",
+            notes: null
+          }
+        ];
+        
+        return res.json({
+          studentNotes: sampleStudentNotes,
+          publicationNotes: notesList,
+          students: studentsList
+        });
+      }
+      
+      res.json({
+        studentNotes,
+        publicationNotes: notesList,
+        students: studentsList
+      });
+    } catch (error) {
+      console.error('Error fetching student notes:', error);
+      res.status(500).json({ 
+        message: "Error fetching student notes",
         error: error instanceof Error ? error.message : String(error)
       });
     }

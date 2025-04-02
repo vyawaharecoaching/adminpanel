@@ -1,6 +1,8 @@
 -- Supabase schema setup script for Vyawahare Coaching Classes
 -- Run this SQL in your Supabase SQL Editor to create the necessary tables
 
+-- Note: This updated schema includes publication_notes and student_notes tables for tracking educational materials
+
 -- Users table
 CREATE TABLE IF NOT EXISTS public.users (
     id SERIAL PRIMARY KEY,

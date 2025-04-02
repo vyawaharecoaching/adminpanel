@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { 
   Home, Users, GraduationCap, CalendarCheck, FileText, 
   Banknote, Settings, ChevronDown, ChevronUp, UserPlus,
-  BarChart
+  BarChart, BookOpen
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
@@ -132,6 +132,15 @@ export const Sidebar = ({ isOpen, setIsOpen }: SidebarProps) => {
               label="Test Results" 
               active={location === "/test-results"} 
             />
+            
+            {isAdmin && (
+              <NavItem 
+                href="/publication-notes" 
+                icon={<BookOpen className="h-5 w-5" />} 
+                label="Publication Notes" 
+                active={location === "/publication-notes"} 
+              />
+            )}
           </>
         )}
 

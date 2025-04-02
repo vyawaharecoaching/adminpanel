@@ -11,6 +11,7 @@ import Installments from "@/pages/installments";
 import Reports from "@/pages/reports";
 import AccountSettings from "@/pages/account-settings";
 import StudentProfile from "@/pages/student-profile";
+import PublicationNotes from "@/pages/publication-notes";
 import DebugPage from "@/pages/debug-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
@@ -32,6 +33,7 @@ const AppRoutes = () => {
         <ProtectedRoute path="/test-results" component={TestResults} />
         <ProtectedRoute path="/installments" component={Installments} />
         <ProtectedRoute path="/reports" component={Reports} />
+        <ProtectedRoute path="/publication-notes" component={PublicationNotes} />
         <ProtectedRoute path="/account-settings" component={AccountSettings} />
         <ProtectedRoute path="/student/:studentId" component={StudentProfile} />
         <Route path="/:rest*">

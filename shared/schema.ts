@@ -176,3 +176,55 @@ export const insertTeacherPaymentSchema = createInsertSchema(teacherPayments).pi
 
 export type InsertTeacherPayment = z.infer<typeof insertTeacherPaymentSchema>;
 export type TeacherPayment = typeof teacherPayments.$inferSelect;
+
+// Publication Notes model (for tracking notes/books inventory)
+export const publicationNotes = pgTable("publication_notes", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  subject: text("subject").notNull(),
+  grade: text("grade").notNull(),
+  totalStock: integer("total_stock").notNull().default(0),
+  availableStock: integer("available_stock").notNull().default(0),
+  lowStockThreshold: integer("low_stock_threshold").notNull().default(5),
+  description: text("description"),
+  lastRestocked: date("last_restocked").defaultNow(),
+});
+
+export const insertPublicationNoteSchema = createInsertSchema(publicationNotes).pick({
+  title: true,
+  subject: true,
+  grade: true,
+  totalStock: true,
+  availableStock: true,
+  lowStockThreshold: true,
+  description: true,
+  lastRestocked: true,
+});
+
+// Student Notes Distribution model (tracking which students received which notes)
+export const studentNotes = pgTable("student_notes", {
+  id: serial("id").primaryKey(),
+  studentId: integer("student_id").notNull(),
+  noteId: integer("note_id").notNull(),
+  dateIssued: date("date_issued").notNull().defaultNow(),
+  isReturned: boolean("is_returned").notNull().default(false),
+  returnDate: date("return_date"),
+  condition: text("condition", { enum: ["excellent", "good", "fair", "poor"] }).default("good"),
+  notes: text("notes"),
+});
+
+export const insertStudentNoteSchema = createInsertSchema(studentNotes).pick({
+  studentId: true,
+  noteId: true,
+  dateIssued: true,
+  isReturned: true,
+  returnDate: true,
+  condition: true,
+  notes: true,
+});
+
+export type InsertPublicationNote = z.infer<typeof insertPublicationNoteSchema>;
+export type PublicationNote = typeof publicationNotes.$inferSelect;
+
+export type InsertStudentNote = z.infer<typeof insertStudentNoteSchema>;
+export type StudentNote = typeof studentNotes.$inferSelect;

@@ -6,7 +6,9 @@ import {
   TestResult, InsertTestResult, 
   Installment, InsertInstallment, 
   Event, InsertEvent,
-  TeacherPayment, InsertTeacherPayment
+  TeacherPayment, InsertTeacherPayment,
+  PublicationNote, InsertPublicationNote,
+  StudentNote, InsertStudentNote
 } from "@shared/schema";
 import createMemoryStore from "memorystore";
 import session from "express-session";
@@ -74,6 +76,22 @@ export interface IStorage {
   createTeacherPayment(payment: InsertTeacherPayment): Promise<TeacherPayment>;
   updateTeacherPayment(id: number, status: string, paymentDate?: Date): Promise<TeacherPayment | undefined>;
   
+  // Publication Notes related methods
+  getPublicationNote(id: number): Promise<PublicationNote | undefined>;
+  getPublicationNotes(): Promise<PublicationNote[]>;
+  getPublicationNotesBySubject(subject: string): Promise<PublicationNote[]>;
+  getPublicationNotesByGrade(grade: string): Promise<PublicationNote[]>;
+  getLowStockPublicationNotes(): Promise<PublicationNote[]>;
+  createPublicationNote(note: InsertPublicationNote): Promise<PublicationNote>;
+  updatePublicationNoteStock(id: number, totalStock: number, availableStock: number): Promise<PublicationNote | undefined>;
+  
+  // Student Notes related methods
+  getStudentNote(id: number): Promise<StudentNote | undefined>;
+  getStudentNotesByStudent(studentId: number): Promise<StudentNote[]>;
+  getStudentNotesByNote(noteId: number): Promise<StudentNote[]>;
+  createStudentNote(studentNote: InsertStudentNote): Promise<StudentNote>;
+  updateStudentNoteStatus(id: number, isReturned: boolean, returnDate?: Date, condition?: string): Promise<StudentNote | undefined>;
+  
   // Session store
   sessionStore: Store;
 }
@@ -87,6 +105,8 @@ export class MemStorage implements IStorage {
   private installments: Map<number, Installment>;
   private events: Map<number, Event>;
   private teacherPayments: Map<number, TeacherPayment>;
+  private publicationNotes: Map<number, PublicationNote>;
+  private studentNotes: Map<number, StudentNote>;
   
   currentUserId: number;
   currentStudentId: number;
@@ -96,6 +116,8 @@ export class MemStorage implements IStorage {
   currentInstallmentId: number;
   currentEventId: number;
   currentTeacherPaymentId: number;
+  currentPublicationNoteId: number;
+  currentStudentNoteId: number;
   
   // Supabase property - undefined for MemStorage
   supabase?: any = undefined;
@@ -111,6 +133,8 @@ export class MemStorage implements IStorage {
     this.installments = new Map();
     this.events = new Map();
     this.teacherPayments = new Map();
+    this.publicationNotes = new Map();
+    this.studentNotes = new Map();
     
     this.currentUserId = 1;
     this.currentStudentId = 1;
@@ -120,6 +144,8 @@ export class MemStorage implements IStorage {
     this.currentInstallmentId = 1;
     this.currentEventId = 1;
     this.currentTeacherPaymentId = 1;
+    this.currentPublicationNoteId = 1;
+    this.currentStudentNoteId = 1;
     
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000 // prune expired entries every 24h
@@ -516,6 +542,7 @@ export class MemStorage implements IStorage {
         amount: 25000,
         month: nextMonthString,
         description: "Monthly salary",
+        paymentDate: new Date().toISOString(), // Add payment date to fix type error
         status: "pending"
       });
       
@@ -539,6 +566,7 @@ export class MemStorage implements IStorage {
         amount: 22000,
         month: currentMonth,
         description: "Monthly salary",
+        paymentDate: new Date().toISOString(), // Add payment date to fix type error
         status: "pending"
       });
       
@@ -716,6 +744,7 @@ export class MemStorage implements IStorage {
     const result: TestResult = { 
       ...insertResult, 
       id, 
+      maxScore: insertResult.maxScore || 100, // Ensure maxScore has a value, defaulting to 100
       status: insertResult.status || "pending" 
     };
     this.testResults.set(id, result);
@@ -846,6 +875,134 @@ export class MemStorage implements IStorage {
     };
     this.teacherPayments.set(id, updatedPayment);
     return updatedPayment;
+  }
+
+  // Publication Notes methods
+  async getPublicationNote(id: number): Promise<PublicationNote | undefined> {
+    return this.publicationNotes.get(id);
+  }
+
+  async getPublicationNotes(): Promise<PublicationNote[]> {
+    return Array.from(this.publicationNotes.values());
+  }
+
+  async getPublicationNotesBySubject(subject: string): Promise<PublicationNote[]> {
+    return Array.from(this.publicationNotes.values()).filter(
+      (note) => note.subject === subject
+    );
+  }
+
+  async getPublicationNotesByGrade(grade: string): Promise<PublicationNote[]> {
+    return Array.from(this.publicationNotes.values()).filter(
+      (note) => note.grade === grade
+    );
+  }
+
+  async getLowStockPublicationNotes(): Promise<PublicationNote[]> {
+    return Array.from(this.publicationNotes.values()).filter(
+      (note) => note.availableStock <= note.lowStockThreshold
+    );
+  }
+
+  async createPublicationNote(insertNote: InsertPublicationNote): Promise<PublicationNote> {
+    const id = this.currentPublicationNoteId++;
+    const note: PublicationNote = {
+      ...insertNote,
+      id,
+      totalStock: insertNote.totalStock || 0,
+      availableStock: insertNote.availableStock || 0,
+      lowStockThreshold: insertNote.lowStockThreshold || 5,
+      lastRestocked: insertNote.lastRestocked || new Date().toISOString(),
+      description: insertNote.description || null
+    };
+    this.publicationNotes.set(id, note);
+    return note;
+  }
+
+  async updatePublicationNoteStock(id: number, totalStock: number, availableStock: number): Promise<PublicationNote | undefined> {
+    const note = this.publicationNotes.get(id);
+    if (!note) return undefined;
+
+    const updatedNote = {
+      ...note,
+      totalStock,
+      availableStock,
+      lastRestocked: new Date().toISOString()
+    };
+
+    this.publicationNotes.set(id, updatedNote);
+    return updatedNote;
+  }
+
+  // Student Notes methods
+  async getStudentNote(id: number): Promise<StudentNote | undefined> {
+    return this.studentNotes.get(id);
+  }
+
+  async getStudentNotesByStudent(studentId: number): Promise<StudentNote[]> {
+    return Array.from(this.studentNotes.values()).filter(
+      (note) => note.studentId === studentId
+    );
+  }
+
+  async getStudentNotesByNote(noteId: number): Promise<StudentNote[]> {
+    return Array.from(this.studentNotes.values()).filter(
+      (note) => note.noteId === noteId
+    );
+  }
+
+  async createStudentNote(insertStudentNote: InsertStudentNote): Promise<StudentNote> {
+    const id = this.currentStudentNoteId++;
+    const studentNote: StudentNote = {
+      ...insertStudentNote,
+      id,
+      dateIssued: insertStudentNote.dateIssued || new Date().toISOString(),
+      isReturned: insertStudentNote.isReturned || false,
+      returnDate: insertStudentNote.returnDate || null,
+      condition: (insertStudentNote.condition as "excellent" | "good" | "fair" | "poor" | null) || "good",
+      notes: insertStudentNote.notes || null
+    };
+    this.studentNotes.set(id, studentNote);
+    
+    // Update available stock in the publication notes
+    const note = this.publicationNotes.get(insertStudentNote.noteId);
+    if (note && !insertStudentNote.isReturned) {
+      const updatedNote = {
+        ...note,
+        availableStock: Math.max(0, note.availableStock - 1)
+      };
+      this.publicationNotes.set(note.id, updatedNote);
+    }
+    
+    return studentNote;
+  }
+
+  async updateStudentNoteStatus(id: number, isReturned: boolean, returnDate?: Date, condition?: "excellent" | "good" | "fair" | "poor"): Promise<StudentNote | undefined> {
+    const studentNote = this.studentNotes.get(id);
+    if (!studentNote) return undefined;
+
+    const updatedStudentNote = {
+      ...studentNote,
+      isReturned,
+      returnDate: returnDate ? returnDate.toISOString() : studentNote.returnDate,
+      condition: condition || studentNote.condition
+    };
+
+    this.studentNotes.set(id, updatedStudentNote);
+    
+    // Update available stock in the publication notes if note is being returned
+    if (isReturned && !studentNote.isReturned) {
+      const note = this.publicationNotes.get(studentNote.noteId);
+      if (note) {
+        const updatedNote = {
+          ...note,
+          availableStock: Math.min(note.totalStock, note.availableStock + 1)
+        };
+        this.publicationNotes.set(note.id, updatedNote);
+      }
+    }
+    
+    return updatedStudentNote;
   }
 }
 

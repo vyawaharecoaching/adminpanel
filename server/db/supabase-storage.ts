@@ -8,7 +8,9 @@ import {
   TestResult, InsertTestResult,
   Installment, InsertInstallment,
   Event, InsertEvent,
-  TeacherPayment, InsertTeacherPayment
+  TeacherPayment, InsertTeacherPayment,
+  PublicationNote, InsertPublicationNote,
+  StudentNote, InsertStudentNote
 } from '@shared/schema';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
@@ -640,6 +642,312 @@ export class SupabaseStorage implements IStorage {
     
     if (error || !data) return undefined;
     return data as TeacherPayment;
+  }
+
+  // Publication Notes related methods
+  async getPublicationNote(id: number): Promise<PublicationNote | undefined> {
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error || !data) return undefined;
+    
+    // Transform snake_case to camelCase
+    return {
+      id: data.id,
+      title: data.title,
+      subject: data.subject,
+      grade: data.grade,
+      totalStock: data.total_stock,
+      availableStock: data.available_stock,
+      lowStockThreshold: data.low_stock_threshold,
+      lastRestocked: data.last_restocked,
+      description: data.description
+    };
+  }
+
+  async getPublicationNotes(): Promise<PublicationNote[]> {
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .select('*');
+    
+    if (error) throw new Error(`Failed to get publication notes: ${error.message}`);
+    
+    // Transform each note from snake_case to camelCase
+    return (data || []).map(note => ({
+      id: note.id,
+      title: note.title,
+      subject: note.subject,
+      grade: note.grade,
+      totalStock: note.total_stock,
+      availableStock: note.available_stock,
+      lowStockThreshold: note.low_stock_threshold,
+      lastRestocked: note.last_restocked,
+      description: note.description
+    }));
+  }
+
+  async getPublicationNotesBySubject(subject: string): Promise<PublicationNote[]> {
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .select('*')
+      .eq('subject', subject);
+    
+    if (error) throw new Error(`Failed to get publication notes by subject: ${error.message}`);
+    
+    // Transform each note from snake_case to camelCase
+    return (data || []).map(note => ({
+      id: note.id,
+      title: note.title,
+      subject: note.subject,
+      grade: note.grade,
+      totalStock: note.total_stock,
+      availableStock: note.available_stock,
+      lowStockThreshold: note.low_stock_threshold,
+      lastRestocked: note.last_restocked,
+      description: note.description
+    }));
+  }
+
+  async getPublicationNotesByGrade(grade: string): Promise<PublicationNote[]> {
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .select('*')
+      .eq('grade', grade);
+    
+    if (error) throw new Error(`Failed to get publication notes by grade: ${error.message}`);
+    
+    // Transform each note from snake_case to camelCase
+    return (data || []).map(note => ({
+      id: note.id,
+      title: note.title,
+      subject: note.subject,
+      grade: note.grade,
+      totalStock: note.total_stock,
+      availableStock: note.available_stock,
+      lowStockThreshold: note.low_stock_threshold,
+      lastRestocked: note.last_restocked,
+      description: note.description
+    }));
+  }
+
+  async getLowStockPublicationNotes(): Promise<PublicationNote[]> {
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .select('*');
+    
+    if (error) throw new Error(`Failed to get low stock publication notes: ${error.message}`);
+    
+    // Filter for low stock and transform from snake_case to camelCase
+    return (data || [])
+      .filter(note => note.available_stock <= note.low_stock_threshold)
+      .map(note => ({
+        id: note.id,
+        title: note.title,
+        subject: note.subject,
+        grade: note.grade,
+        totalStock: note.total_stock,
+        availableStock: note.available_stock,
+        lowStockThreshold: note.low_stock_threshold,
+        lastRestocked: note.last_restocked,
+        description: note.description
+      }));
+  }
+
+  async createPublicationNote(note: InsertPublicationNote): Promise<PublicationNote> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedNote = {
+      title: note.title,
+      subject: note.subject,
+      grade: note.grade,
+      total_stock: note.totalStock,
+      available_stock: note.availableStock,
+      low_stock_threshold: note.lowStockThreshold,
+      last_restocked: note.lastRestocked,
+      description: note.description
+    };
+    
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .insert([transformedNote])
+      .select()
+      .single();
+    
+    if (error) throw new Error(`Failed to create publication note: ${error.message}`);
+    if (!data) throw new Error('Failed to create publication note: No data returned');
+    
+    // Transform the returned data back to camelCase
+    return {
+      id: data.id,
+      title: data.title,
+      subject: data.subject,
+      grade: data.grade,
+      totalStock: data.total_stock,
+      availableStock: data.available_stock,
+      lowStockThreshold: data.low_stock_threshold,
+      lastRestocked: data.last_restocked,
+      description: data.description
+    };
+  }
+
+  async updatePublicationNoteStock(id: number, totalStock: number, availableStock: number): Promise<PublicationNote | undefined> {
+    const { data, error } = await supabase
+      .from('publication_notes')
+      .update({
+        total_stock: totalStock,
+        available_stock: availableStock,
+        last_restocked: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error || !data) return undefined;
+    
+    // Transform the returned data to camelCase
+    return {
+      id: data.id,
+      title: data.title,
+      subject: data.subject,
+      grade: data.grade,
+      totalStock: data.total_stock,
+      availableStock: data.available_stock,
+      lowStockThreshold: data.low_stock_threshold,
+      lastRestocked: data.last_restocked,
+      description: data.description
+    };
+  }
+
+  // Student Notes related methods
+  async getStudentNote(id: number): Promise<StudentNote | undefined> {
+    const { data, error } = await supabase
+      .from('student_notes')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error || !data) return undefined;
+    
+    // Transform snake_case to camelCase
+    return {
+      id: data.id,
+      studentId: data.student_id,
+      noteId: data.note_id,
+      dateIssued: data.date_issued,
+      isReturned: data.is_returned,
+      returnDate: data.return_date,
+      condition: data.condition,
+      notes: data.notes
+    };
+  }
+
+  async getStudentNotesByStudent(studentId: number): Promise<StudentNote[]> {
+    const { data, error } = await supabase
+      .from('student_notes')
+      .select('*')
+      .eq('student_id', studentId);
+    
+    if (error) throw new Error(`Failed to get student notes by student: ${error.message}`);
+    
+    // Transform each note from snake_case to camelCase
+    return (data || []).map(note => ({
+      id: note.id,
+      studentId: note.student_id,
+      noteId: note.note_id,
+      dateIssued: note.date_issued,
+      isReturned: note.is_returned,
+      returnDate: note.return_date,
+      condition: note.condition,
+      notes: note.notes
+    }));
+  }
+
+  async getStudentNotesByNote(noteId: number): Promise<StudentNote[]> {
+    const { data, error } = await supabase
+      .from('student_notes')
+      .select('*')
+      .eq('note_id', noteId);
+    
+    if (error) throw new Error(`Failed to get student notes by note: ${error.message}`);
+    
+    // Transform each note from snake_case to camelCase
+    return (data || []).map(note => ({
+      id: note.id,
+      studentId: note.student_id,
+      noteId: note.note_id,
+      dateIssued: note.date_issued,
+      isReturned: note.is_returned,
+      returnDate: note.return_date,
+      condition: note.condition,
+      notes: note.notes
+    }));
+  }
+
+  async createStudentNote(studentNote: InsertStudentNote): Promise<StudentNote> {
+    // Convert camelCase to snake_case for Supabase
+    const transformedNote = {
+      student_id: studentNote.studentId,
+      note_id: studentNote.noteId,
+      date_issued: studentNote.dateIssued,
+      is_returned: studentNote.isReturned,
+      return_date: studentNote.returnDate,
+      condition: studentNote.condition,
+      notes: studentNote.notes
+    };
+    
+    const { data, error } = await supabase
+      .from('student_notes')
+      .insert([transformedNote])
+      .select()
+      .single();
+    
+    if (error) throw new Error(`Failed to create student note: ${error.message}`);
+    if (!data) throw new Error('Failed to create student note: No data returned');
+    
+    // Transform the returned data back to camelCase
+    return {
+      id: data.id,
+      studentId: data.student_id,
+      noteId: data.note_id,
+      dateIssued: data.date_issued,
+      isReturned: data.is_returned,
+      returnDate: data.return_date,
+      condition: data.condition,
+      notes: data.notes
+    };
+  }
+
+  async updateStudentNoteStatus(id: number, isReturned: boolean, returnDate?: Date, condition?: string): Promise<StudentNote | undefined> {
+    const updateData: any = { is_returned: isReturned };
+    if (returnDate) {
+      updateData.return_date = returnDate.toISOString();
+    }
+    if (condition) {
+      updateData.condition = condition;
+    }
+    
+    const { data, error } = await supabase
+      .from('student_notes')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error || !data) return undefined;
+    
+    // Transform the returned data to camelCase
+    return {
+      id: data.id,
+      studentId: data.student_id,
+      noteId: data.note_id,
+      dateIssued: data.date_issued,
+      isReturned: data.is_returned,
+      returnDate: data.return_date,
+      condition: data.condition,
+      notes: data.notes
+    };
   }
 
   // Add sample data - this can be used for initial setup only if needed
