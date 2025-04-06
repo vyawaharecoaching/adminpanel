@@ -55,7 +55,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Bookmark, BookOpen, Check, Edit, LibraryBig, Plus, RefreshCcw } from "lucide-react";
+import { AlertCircle, Bookmark, BookOpen, Check, Edit, LibraryBig, Plus, RefreshCcw, Users } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -470,15 +470,21 @@ const PublicationNotesPage = () => {
     return student ? student.fullName : "Unknown";
   };
   
-  // Get condition badge color
-  const getConditionColor = (condition: string | null) => {
-    if (!condition) return "secondary";
+  // Get condition badge styles
+  const getConditionStyles = (condition: string | null) => {
+    if (!condition) return { variant: "secondary" as const, className: "" };
+    
     switch (condition) {
-      case "excellent": return "green";
-      case "good": return "blue";
-      case "fair": return "yellow";
-      case "poor": return "destructive";
-      default: return "secondary";
+      case "excellent": 
+        return { variant: "outline" as const, className: "bg-green-50 text-green-700 border-green-200" };
+      case "good": 
+        return { variant: "outline" as const, className: "bg-blue-50 text-blue-700 border-blue-200" };
+      case "fair": 
+        return { variant: "outline" as const, className: "bg-yellow-50 text-yellow-700 border-yellow-200" };
+      case "poor": 
+        return { variant: "destructive" as const, className: "" };
+      default: 
+        return { variant: "secondary" as const, className: "" };
     }
   };
   
@@ -492,11 +498,85 @@ const PublicationNotesPage = () => {
     }).format(date);
   };
   
+  // Calculate statistics for summary cards
+  const calculateStats = () => {
+    if (!notes) return { total: 0, totalAvailable: 0, totalDistributed: 0, lowStock: 0 };
+    
+    const total = notes.length;
+    const totalAvailable = notes.reduce((sum, note) => sum + note.availableStock, 0);
+    const totalStock = notes.reduce((sum, note) => sum + note.totalStock, 0);
+    const totalDistributed = totalStock - totalAvailable;
+    const lowStock = notes.filter(note => note.availableStock <= note.lowStockThreshold).length;
+    
+    return { total, totalAvailable, totalDistributed, lowStock };
+  };
+  
+  const stats = calculateStats();
+
   return (
     <PageContainer
       title="Publication Notes"
       subtitle="Manage your educational materials inventory and distribution"
     >
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Publications</p>
+                <h3 className="text-2xl font-bold">{stats.total}</h3>
+              </div>
+              <div className="p-2 bg-primary/10 rounded-full">
+                <LibraryBig className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Available Items</p>
+                <h3 className="text-2xl font-bold">{stats.totalAvailable}</h3>
+              </div>
+              <div className="p-2 bg-green-100 rounded-full">
+                <BookOpen className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Distributed Items</p>
+                <h3 className="text-2xl font-bold">{stats.totalDistributed}</h3>
+              </div>
+              <div className="p-2 bg-blue-100 rounded-full">
+                <Users className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Low Stock Items</p>
+                <h3 className="text-2xl font-bold">{stats.lowStock}</h3>
+              </div>
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+      
       <div className="flex justify-end mb-6">
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" /> Add New Publication
@@ -879,7 +959,9 @@ const PublicationNotesPage = () => {
                             </TableCell>
                             <TableCell>
                               {note.condition && (
-                                <Badge variant={getConditionColor(note.condition)}>
+                                <Badge 
+                                  variant={getConditionStyles(note.condition).variant}
+                                  className={getConditionStyles(note.condition).className}>
                                   {note.condition}
                                 </Badge>
                               )}
