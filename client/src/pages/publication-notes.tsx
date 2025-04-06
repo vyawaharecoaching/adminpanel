@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { insertPublicationNoteSchema } from "@shared/schema";
+import { PageContainer } from "@/components/layout/page-container";
 
 import {
   Card,
@@ -97,6 +98,80 @@ type Student = {
   fullName: string;
   role: "student";
   grade: string | null;
+};
+
+// Component for the publication notes table
+const PublicationNotesTable = ({ 
+  notes, 
+  onEditStock, 
+  onOpenDistribution 
+}: { 
+  notes: PublicationNote[]; 
+  onEditStock: (note: PublicationNote) => void;
+  onOpenDistribution: (note: PublicationNote) => void;
+}) => {
+  if (!notes || notes.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+          <Bookmark className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-medium">No Publication Notes</h3>
+          <p className="text-muted-foreground">Create your first publication note to get started.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Grade</TableHead>
+              <TableHead>Stock</TableHead>
+              <TableHead>Last Restocked</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {notes.map((note) => (
+              <TableRow key={note.id}>
+                <TableCell className="font-medium">{note.title}</TableCell>
+                <TableCell>{note.subject}</TableCell>
+                <TableCell>{note.grade}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span>
+                      {note.availableStock} / {note.totalStock} available
+                    </span>
+                    {note.availableStock <= note.lowStockThreshold && (
+                      <Badge variant="destructive" className="w-fit mt-1">
+                        Low Stock
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>{new Date(note.lastRestocked).toLocaleDateString()}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => onEditStock(note)}>
+                      <Edit className="h-4 w-4 mr-1" /> Stock
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => onOpenDistribution(note)}>
+                      <BookOpen className="h-4 w-4 mr-1" /> Distribute
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
 };
 
 // Component for the main page
@@ -418,14 +493,11 @@ const PublicationNotesPage = () => {
   };
   
   return (
-    <div className="container max-w-7xl mx-auto py-10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Publication Notes</h1>
-          <p className="text-muted-foreground">
-            Manage your educational materials inventory and distribution
-          </p>
-        </div>
+    <PageContainer
+      title="Publication Notes"
+      subtitle="Manage your educational materials inventory and distribution"
+    >
+      <div className="flex justify-end mb-6">
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" /> Add New Publication
         </Button>
@@ -800,25 +872,27 @@ const PublicationNotesPage = () => {
                                   <Check className="mr-1 h-3 w-3" /> Returned {note.returnDate ? `(${formatDate(note.returnDate)})` : ''}
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                  <BookOpen className="mr-1 h-3 w-3" /> Issued
+                                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                  Issued
                                 </Badge>
                               )}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline" className={`bg-${getConditionColor(note.condition)}-50 text-${getConditionColor(note.condition)}-700 border-${getConditionColor(note.condition)}-200`}>
-                                {note.condition || "Unknown"}
-                              </Badge>
+                              {note.condition && (
+                                <Badge variant={getConditionColor(note.condition)}>
+                                  {note.condition}
+                                </Badge>
+                              )}
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate">{note.notes || "-"}</TableCell>
+                            <TableCell>{note.notes || '-'}</TableCell>
                             <TableCell>
                               {!note.isReturned && (
-                                <Button
-                                  variant="ghost"
+                                <Button 
+                                  variant="ghost" 
                                   size="sm"
-                                  onClick={() => handleMarkAsReturned(note.id, note.condition || "good")}
+                                  onClick={() => handleMarkAsReturned(note.id, note.condition || 'good')}
                                 >
-                                  Mark as Returned
+                                  <Check className="mr-1 h-3 w-3" /> Return
                                 </Button>
                               )}
                             </TableCell>
@@ -828,9 +902,9 @@ const PublicationNotesPage = () => {
                   </Table>
                 </ScrollArea>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <LibraryBig className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium">No Distribution Records</h3>
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">No Students Assigned</h3>
                   <p className="text-muted-foreground">This publication has not been distributed to any students yet.</p>
                 </div>
               )}
@@ -838,7 +912,7 @@ const PublicationNotesPage = () => {
             
             <TabsContent value="assign">
               <Form {...distributionForm}>
-                <form onSubmit={distributionForm.handleSubmit(handleAssignNote)} className="space-y-4">
+                <form onSubmit={distributionForm.handleSubmit(handleAssignNote)} className="space-y-6">
                   <FormField
                     control={distributionForm.control}
                     name="studentId"
@@ -851,20 +925,24 @@ const PublicationNotesPage = () => {
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a student" />
+                              <SelectValue placeholder="Select student" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {isStudentsLoading ? (
-                              <SelectItem value="loading" disabled>Loading students...</SelectItem>
-                            ) : students && students.length > 0 ? (
+                              <SelectItem value="loading" disabled>
+                                Loading students...
+                              </SelectItem>
+                            ) : !students || students.length === 0 ? (
+                              <SelectItem value="none" disabled>
+                                No students available
+                              </SelectItem>
+                            ) : (
                               students.map((student) => (
                                 <SelectItem key={student.id} value={student.id.toString()}>
-                                  {student.fullName} {student.grade ? `(${student.grade})` : ''}
+                                  {student.fullName} ({student.grade || 'No Grade'})
                                 </SelectItem>
                               ))
-                            ) : (
-                              <SelectItem value="none" disabled>No students available</SelectItem>
                             )}
                           </SelectContent>
                         </Select>
@@ -878,7 +956,7 @@ const PublicationNotesPage = () => {
                     name="condition"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Initial Condition</FormLabel>
+                        <FormLabel>Condition</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
@@ -905,9 +983,9 @@ const PublicationNotesPage = () => {
                         <FormLabel>Notes</FormLabel>
                         <FormControl>
                           <Textarea 
-                            placeholder="Any notes about this distribution" 
+                            placeholder="Any additional notes about this assignment..." 
                             {...field} 
-                            value={field.value || ''}
+                            value={field.value || ''} 
                           />
                         </FormControl>
                         <FormMessage />
@@ -915,28 +993,15 @@ const PublicationNotesPage = () => {
                     )}
                   />
                   
-                  <Separator className="my-4" />
-                  
-                  <div className="flex items-center bg-amber-50 p-4 rounded-md">
-                    <AlertCircle className="h-5 w-5 text-amber-500 mr-2" />
-                    <div className="text-sm text-amber-700">
-                      <p>Current available stock: {getSelectedNote()?.availableStock || 0}</p>
-                      <p className="font-medium">
-                        {(getSelectedNote()?.availableStock || 0) <= 0 ? 
-                          'Warning: No copies available for distribution!' : 
-                          'This action will reduce the available stock by 1.'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  
                   <DialogFooter>
+                    <Button type="button" variant="secondary" onClick={() => setIsDistributionDialogOpen(false)}>
+                      Cancel
+                    </Button>
                     <Button 
                       type="submit" 
                       disabled={
                         assignNoteMutation.isPending || 
-                        (getSelectedNote()?.availableStock || 0) <= 0 ||
-                        distributionForm.getValues().studentId === 0
+                        !distributionForm.getValues().studentId
                       }
                     >
                       {assignNoteMutation.isPending ? (
@@ -945,7 +1010,7 @@ const PublicationNotesPage = () => {
                           Assigning...
                         </>
                       ) : (
-                        <>Assign</>
+                        <>Assign to Student</>
                       )}
                     </Button>
                   </DialogFooter>
@@ -955,81 +1020,7 @@ const PublicationNotesPage = () => {
           </Tabs>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-};
-
-// Component for the publication notes table
-const PublicationNotesTable = ({ 
-  notes, 
-  onEditStock, 
-  onOpenDistribution 
-}: { 
-  notes: PublicationNote[]; 
-  onEditStock: (note: PublicationNote) => void;
-  onOpenDistribution: (note: PublicationNote) => void;
-}) => {
-  if (!notes || notes.length === 0) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-          <Bookmark className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">No Publication Notes</h3>
-          <p className="text-muted-foreground">Create your first publication note to get started.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-  
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Subject</TableHead>
-              <TableHead>Grade</TableHead>
-              <TableHead>Stock</TableHead>
-              <TableHead>Last Restocked</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {notes.map((note) => (
-              <TableRow key={note.id}>
-                <TableCell className="font-medium">{note.title}</TableCell>
-                <TableCell>{note.subject}</TableCell>
-                <TableCell>{note.grade}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span>
-                      {note.availableStock} / {note.totalStock} available
-                    </span>
-                    {note.availableStock <= note.lowStockThreshold && (
-                      <Badge variant="destructive" className="w-fit mt-1">
-                        Low Stock
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>{new Date(note.lastRestocked).toLocaleDateString()}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => onEditStock(note)}>
-                      <Edit className="h-4 w-4 mr-1" /> Stock
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => onOpenDistribution(note)}>
-                      <BookOpen className="h-4 w-4 mr-1" /> Distribute
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    </PageContainer>
   );
 };
 
