@@ -151,7 +151,7 @@ export class SupabaseStorage implements IStorage {
       if (error) throw new Error(`Failed to get users: ${error.message}`);
       
       // Transform each user from snake_case to camelCase
-      const users: User[] = (data || []).map(user => ({
+      const users: User[] = (data || []).map((user: { id: any; username: any; password: any; full_name: any; email: any; role: any; grade: any; join_date: any; }) => ({
         id: user.id,
         username: user.username,
         password: user.password,
@@ -179,7 +179,7 @@ export class SupabaseStorage implements IStorage {
       if (error) throw new Error(`Failed to get users by role: ${error.message}`);
       
       // Transform each user from snake_case to camelCase
-      const users: User[] = (data || []).map(user => ({
+      const users: User[] = (data || []).map((user: { id: any; username: any; password: any; full_name: any; email: any; role: any; grade: any; join_date: any; }) => ({
         id: user.id,
         username: user.username,
         password: user.password,
@@ -676,7 +676,7 @@ export class SupabaseStorage implements IStorage {
     if (error) throw new Error(`Failed to get publication notes: ${error.message}`);
     
     // Transform each note from snake_case to camelCase
-    return (data || []).map(note => ({
+    return (data || []).map((note: { id: any; title: any; subject: any; grade: any; total_stock: any; available_stock: any; low_stock_threshold: any; last_restocked: any; description: any; }) => ({
       id: note.id,
       title: note.title,
       subject: note.subject,
@@ -698,7 +698,7 @@ export class SupabaseStorage implements IStorage {
     if (error) throw new Error(`Failed to get publication notes by subject: ${error.message}`);
     
     // Transform each note from snake_case to camelCase
-    return (data || []).map(note => ({
+    return (data || []).map((note: { id: any; title: any; subject: any; grade: any; total_stock: any; available_stock: any; low_stock_threshold: any; last_restocked: any; description: any; }) => ({
       id: note.id,
       title: note.title,
       subject: note.subject,
@@ -720,7 +720,7 @@ export class SupabaseStorage implements IStorage {
     if (error) throw new Error(`Failed to get publication notes by grade: ${error.message}`);
     
     // Transform each note from snake_case to camelCase
-    return (data || []).map(note => ({
+    return (data || []).map((note: { id: any; title: any; subject: any; grade: any; total_stock: any; available_stock: any; low_stock_threshold: any; last_restocked: any; description: any; }) => ({
       id: note.id,
       title: note.title,
       subject: note.subject,
@@ -742,8 +742,8 @@ export class SupabaseStorage implements IStorage {
     
     // Filter for low stock and transform from snake_case to camelCase
     return (data || [])
-      .filter(note => note.available_stock <= note.low_stock_threshold)
-      .map(note => ({
+      .filter((note: { available_stock: number; low_stock_threshold: number; }) => note.available_stock <= note.low_stock_threshold)
+      .map((note: { id: any; title: any; subject: any; grade: any; total_stock: any; available_stock: any; low_stock_threshold: any; last_restocked: any; description: any; }) => ({
         id: note.id,
         title: note.title,
         subject: note.subject,
@@ -852,7 +852,7 @@ export class SupabaseStorage implements IStorage {
     if (error) throw new Error(`Failed to get student notes by student: ${error.message}`);
     
     // Transform each note from snake_case to camelCase
-    return (data || []).map(note => ({
+    return (data || []).map((note: { id: any; student_id: any; note_id: any; date_issued: any; is_returned: any; return_date: any; condition: any; notes: any; }) => ({
       id: note.id,
       studentId: note.student_id,
       noteId: note.note_id,
@@ -873,7 +873,7 @@ export class SupabaseStorage implements IStorage {
     if (error) throw new Error(`Failed to get student notes by note: ${error.message}`);
     
     // Transform each note from snake_case to camelCase
-    return (data || []).map(note => ({
+    return (data || []).map((note: { id: any; student_id: any; note_id: any; date_issued: any; is_returned: any; return_date: any; condition: any; notes: any; }) => ({
       id: note.id,
       studentId: note.student_id,
       noteId: note.note_id,

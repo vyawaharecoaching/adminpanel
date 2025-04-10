@@ -1,7 +1,13 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { User, InsertUser, InsertStudent } from "@shared/schema";
+import {
+  JSXElementConstructor,
+  Key,
+  ReactElement,
+  ReactNode,
+  ReactPortal,
+  useState,
+} from "react";
 import { PageContainer } from "@/components/layout/page-container";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,7 +25,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -30,15 +35,13 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { 
-  Loader2, 
-  PlusCircle, 
-  Search, 
-  User as UserIcon, 
-  BookOpen, 
-  CalendarIcon, 
+import {
+  CalendarIcon,
+  Loader2,
+  PlusCircle,
+  Search,
   Upload,
-  CheckCircle 
+  User as UserIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -59,179 +62,174 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
+import { log } from "console";
 
 // Define the form schema
 const studentRegistrationSchema = z.object({
-  // Personal details
-  surname: z.string().min(1, "Surname is required"),
-  name: z.string().min(1, "Name is required"),
-  fatherName: z.string().min(1, "Father's name is required"),
-  fullName: z.string().min(1, "Full name is required"),
-  school: z.string().min(1, "School/College name is required"),
-  medium: z.string(),
-  subjects: z.array(z.string()).min(1, "At least one subject is required"),
-  gender: z.enum(["Male", "Female"]),
-  birthDate: z.date(),
-  bloodGroup: z.string().optional(),
-  fatherOccupation: z.string(),
-  
-  // Contact information
-  permanentAddress: z.string().min(1, "Permanent address is required"),
-  localAddress: z.string().min(1, "Local address is required"),
-  permanentMobile: z.string().min(10, "Valid mobile number is required"),
-  localMobile: z.string().min(10, "Valid mobile number is required"),
-  permanentEmail: z.string().email("Valid email is required"),
-  localEmail: z.string().email("Valid email is required"),
-  
-  // Previous examination details
-  examName: z.string().min(1, "Exam name is required"),
-  examClass: z.string().min(1, "Class is required"),
-  faculty: z.string().min(1, "Faculty is required"),
-  seatNo: z.string().min(1, "Seat number is required"),
-  examCenter: z.string().min(1, "Exam center is required"),
-  examMonth: z.string().min(1, "Month is required"),
-  examYear: z.string().min(1, "Year is required"),
-  marksObtained: z.string().min(1, "Marks obtained is required"),
-  marksOutOf: z.string().min(1, "Total marks is required"),
-  percentage: z.string().min(1, "Percentage is required"),
-  classObtained: z.string().min(1, "Class obtained is required"),
-  markMemoSubmitted: z.boolean(),
-  
-  // Declarations
-  studentDeclaration: z.boolean().refine(val => val === true, {
-    message: "You must agree to the student declaration",
-  }),
-  parentDeclaration: z.boolean().refine(val => val === true, {
-    message: "Parent must agree to the parent declaration",
-  }),
-  
-  // Simple authentication fields
-  username: z.string().min(3, "Username must be at least 3 characters").optional(),
-  password: z.string().min(6, "Password must be at least 6 characters").optional(),
-  email: z.string().email("Invalid email address").optional(),
+  surname: z.string().optional(),
+  name: z.string().optional(),
+  full_name: z.string().optional(),
+  fathers_name: z.string().optional(),
+  gender: z.enum(["Male", "Female"]).optional(),
+  birth_date: z.date().optional(),
+  school_or_college: z.string().optional(),
+  medium: z.string().optional(),
+  fathers_occupation: z.string().optional(),
+  blood_group: z.string().optional(),
+  subjects: z.array(z.string()).optional(),
+  permanent_address: z.string().optional(),
+  permanent_mobile: z.string().optional(),
+  permanent_email: z.string().optional(),
+  local_address: z.string().optional(),
+  local_mobile: z.string().optional(),
+  local_email: z.string().optional(),
+  last_exam_name: z.string().optional(),
+  last_exam_class: z.string().optional(),
+  last_exam_faculty: z.string().optional(),
+  last_exam_seat_no: z.string().optional(),
+  last_exam_center: z.string().optional(),
+  last_exam_month: z.string().optional(),
+  last_exam_year: z.string().optional(),
+  last_exam_marks_obtained: z.string().optional(),
+  last_exam_out_of: z.string().optional(),
+  last_exam_percentage: z.string().optional(),
+  last_exam_class_obtained: z.string().optional(),
+  mark_memo_submitted: z.boolean().optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  login_email: z.string().optional(),
+  photo_url: z.string().optional(),
 });
 
 type StudentRegistrationValues = z.infer<typeof studentRegistrationSchema>;
 
-// Simple schema for student filtering
-const filterSchema = z.object({
-  grade: z.string().optional(),
-  searchTerm: z.string().optional(),
-});
-
-type FilterValues = z.infer<typeof filterSchema>;
-
 export default function Students() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isRegisterDialogOpen, setIsRegisterDialogOpen] = useState(false);
-  
   const { toast } = useToast();
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
-  
+
   // Form setup
   const form = useForm<StudentRegistrationValues>({
     resolver: zodResolver(studentRegistrationSchema),
     defaultValues: {
       medium: "Full English",
       gender: "Male",
-      birthDate: new Date(),
+      birth_date: new Date(),
       subjects: [],
-      markMemoSubmitted: false,
-      studentDeclaration: false,
-      parentDeclaration: false,
+      mark_memo_submitted: false,
     },
   });
-  
+
   // Handle photo upload
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setPhotoFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onload = (event) => {
-        if (event.target && typeof event.target.result === 'string') {
+        if (event.target && typeof event.target.result === "string") {
           setPhotoPreview(event.target.result);
         }
       };
       reader.readAsDataURL(file);
     }
   };
-  
+
+  // Updated student data fetching
   const { isLoading, error, data } = useQuery({
-    queryKey: ["/api/users/student"],
+    queryKey: ["students"],
     queryFn: async () => {
-      const res = await fetch("/api/users/student");
-      if (!res.ok) throw new Error("Failed to fetch students data");
-      return await res.json() as User[];
-    }
+      try {
+        const response = await fetch("/api/students");
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+
+        // Check if the response has a data property
+        const studentsData = result.data || result;
+
+        return studentsData.map((student: any) => ({
+          ...student,
+          full_name:
+            student.full_name ||
+            `${student.name || ""} ${student.surname || ""}`.trim(),
+          username: student.username || "N/A",
+          login_email: student.login_email || student.permanent_email || "N/A",
+          last_exam_class: student.last_exam_class || "N/A",
+          created_at: student.created_at ? new Date(student.created_at) : null,
+        }));
+      } catch (err) {
+        throw new Error(
+          `Failed to fetch students: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 2,
   });
 
   // Registration mutation
   const registerMutation = useMutation({
     mutationFn: async (data: StudentRegistrationValues) => {
-      // First create the user with auth data
-      const userResponse = await apiRequest("POST", "/api/register", {
-        username: data.username || data.name.toLowerCase().replace(/\s+/g, '_'),
-        password: data.password || "changeme123", // Default password if not provided
-        fullName: data.fullName,
-        email: data.email || data.permanentEmail,
-        role: "student",
-        grade: data.examClass,
-        joinDate: new Date().toISOString(),
-      } as InsertUser);
-      
-      if (!userResponse.ok) {
-        throw new Error("Failed to create user account");
-      }
-      
-      const user = await userResponse.json();
-      
-      // Then create the student profile with additional details
-      const studentData = {
-        userId: user.id,
-        parentName: data.fatherName,
-        phone: data.permanentMobile,
-        address: data.permanentAddress,
-        dateOfBirth: data.birthDate.toISOString(),
-        // You could add more fields here as needed
-      } as InsertStudent;
-      
-      const studentResponse = await apiRequest("POST", "/api/students", studentData);
-      
-      if (!studentResponse.ok) {
+      // Ensure birth_date is in the correct format
+      const formattedData = {
+        ...data,
+        birth_date: data.birth_date ? data.birth_date.toISOString() : null,
+      };
+
+      const response = await fetch("/api/students", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formattedData),
+      });
+
+      if (!response.ok) {
         throw new Error("Failed to create student profile");
       }
-      
-      // If you have a photo, you could upload it as well
+
+      // Handle photo upload if necessary
       if (photoFile) {
         const formData = new FormData();
-        formData.append("studentId", user.id.toString());
         formData.append("photo", photoFile);
-        
-        const photoResponse = await fetch("/api/student-photo", {
-          method: "POST",
-          body: formData,
-        });
-        
+
+        const photoResponse = await fetch(
+          `/api/student-photo/${data.username}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
         if (!photoResponse.ok) {
           console.warn("Failed to upload student photo");
         }
       }
-      
-      return await studentResponse.json();
+
+      return await response.json();
     },
     onSuccess: () => {
       toast({
@@ -242,7 +240,7 @@ export default function Students() {
       form.reset();
       setPhotoFile(null);
       setPhotoPreview("");
-      queryClient.invalidateQueries({ queryKey: ["/api/users/student"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
     },
     onError: (error: Error) => {
       toast({
@@ -252,43 +250,28 @@ export default function Students() {
       });
     },
   });
-  
+
   // Form submission handler
   const onSubmit = (data: StudentRegistrationValues) => {
-    if (!photoFile) {
-      toast({
-        title: "Photo Required",
-        description: "Please upload a passport size photo",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     registerMutation.mutate(data);
   };
 
   const getInitials = (name: string) => {
     return name
-      .split(' ')
-      .map(part => part[0])
-      .join('')
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
       .toUpperCase();
   };
 
   const formatJoinDate = (joinDate: Date | string | null) => {
-    if (!joinDate) return 'N/A';
-    return typeof joinDate === 'string' 
-      ? format(new Date(joinDate), 'PPP') 
-      : format(joinDate, 'PPP');
+    if (!joinDate) return "N/A";
+    return typeof joinDate === "string"
+      ? format(new Date(joinDate), "PPP")
+      : format(joinDate, "PPP");
   };
 
-  const filteredStudents = data?.filter(student => 
-    student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const grades = ['5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+  const grades = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
 
   return (
     <PageContainer
@@ -303,7 +286,7 @@ export default function Students() {
               View and manage all registered students
             </CardDescription>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -315,8 +298,11 @@ export default function Students() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            
-            <Dialog open={isRegisterDialogOpen} onOpenChange={setIsRegisterDialogOpen}>
+
+            <Dialog
+              open={isRegisterDialogOpen}
+              onOpenChange={setIsRegisterDialogOpen}
+            >
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
                   <PlusCircle className="mr-2 h-4 w-4" />
@@ -325,33 +311,40 @@ export default function Students() {
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="text-2xl text-center">Vyawahare Coaching Classes</DialogTitle>
+                  <DialogTitle className="text-2xl text-center">
+                    Vyawahare Coaching Classes
+                  </DialogTitle>
                   <DialogDescription className="text-center">
                     Student Registration Form - Fill in all details accurately
                   </DialogDescription>
                 </DialogHeader>
-                
+
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className="space-y-6 py-4"
+                  >
                     {/* Photo Upload Section */}
                     <div className="flex justify-center">
                       <div className="flex flex-col items-center">
-                        <div 
+                        <div
                           className={cn(
                             "w-32 h-40 border-2 rounded flex items-center justify-center overflow-hidden",
                             photoPreview ? "p-0" : "p-2"
                           )}
                         >
                           {photoPreview ? (
-                            <img 
-                              src={photoPreview} 
-                              alt="Student photo" 
-                              className="w-full h-full object-cover" 
+                            <img
+                              src={photoPreview}
+                              alt="Student photo"
+                              className="w-full h-full object-cover"
                             />
                           ) : (
                             <div className="text-center">
                               <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
-                              <p className="text-xs text-muted-foreground mt-2">Passport Size Photo</p>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Passport Size Photo
+                              </p>
                             </div>
                           )}
                         </div>
@@ -362,11 +355,13 @@ export default function Students() {
                           accept="image/*"
                           onChange={handlePhotoChange}
                         />
-                        <Button 
-                          type="button" 
-                          variant="outline" 
+                        <Button
+                          type="button"
+                          variant="outline"
                           className="mt-2"
-                          onClick={() => document.getElementById('photo')?.click()}
+                          onClick={() =>
+                            document.getElementById("photo")?.click()
+                          }
                         >
                           Upload Photo
                         </Button>
@@ -375,8 +370,10 @@ export default function Students() {
 
                     {/* Personal Information Section */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold border-b pb-2">Personal Information</h3>
-                      
+                      <h3 className="text-lg font-semibold border-b pb-2">
+                        Personal Information
+                      </h3>
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
@@ -391,7 +388,7 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="name"
@@ -405,65 +402,83 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="fatherName"
+                          name="fathers_name"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Father's Name</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter father's name" {...field} />
+                                <Input
+                                  placeholder="Enter father's name"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="fullName"
+                          name="full_name"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Full Name</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter full name" {...field} />
+                                <Input
+                                  placeholder="Enter full name"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="school"
+                          name="school_or_college"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>School/College Name</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter school/college name" {...field} />
+                                <Input
+                                  placeholder="Enter school/college name"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="medium"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Medium</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Select medium" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="Semi English">Semi English</SelectItem>
-                                  <SelectItem value="Marathi">Marathi</SelectItem>
-                                  <SelectItem value="Full English">Full English</SelectItem>
+                                  <SelectItem value="Semi English">
+                                    Semi English
+                                  </SelectItem>
+                                  <SelectItem value="Marathi">
+                                    Marathi
+                                  </SelectItem>
+                                  <SelectItem value="Full English">
+                                    Full English
+                                  </SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -471,7 +486,7 @@ export default function Students() {
                           )}
                         />
                       </div>
-                      
+
                       <div className="space-y-4">
                         <FormField
                           control={form.control}
@@ -480,7 +495,14 @@ export default function Students() {
                             <FormItem>
                               <FormLabel>Subjects</FormLabel>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {["Mathematics", "Physics", "Chemistry", "Biology", "History", "Geography"].map((subject) => (
+                                {[
+                                  "Mathematics",
+                                  "Physics",
+                                  "Chemistry",
+                                  "Biology",
+                                  "History",
+                                  "Geography",
+                                ].map((subject) => (
                                   <FormField
                                     key={subject}
                                     control={form.control}
@@ -493,15 +515,21 @@ export default function Students() {
                                         >
                                           <FormControl>
                                             <Checkbox
-                                              checked={field.value?.includes(subject)}
+                                              checked={field.value?.includes(
+                                                subject
+                                              )}
                                               onCheckedChange={(checked) => {
                                                 return checked
-                                                  ? field.onChange([...field.value, subject])
+                                                  ? field.onChange([
+                                                      ...field.value,
+                                                      subject,
+                                                    ])
                                                   : field.onChange(
                                                       field.value?.filter(
-                                                        (value) => value !== subject
+                                                        (value) =>
+                                                          value !== subject
                                                       )
-                                                    )
+                                                    );
                                               }}
                                             />
                                           </FormControl>
@@ -509,7 +537,7 @@ export default function Students() {
                                             {subject}
                                           </FormLabel>
                                         </FormItem>
-                                      )
+                                      );
                                     }}
                                   />
                                 ))}
@@ -519,7 +547,7 @@ export default function Students() {
                           )}
                         />
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
@@ -555,10 +583,10 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="birthDate"
+                          name="birth_date"
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
                               <FormLabel>Birth Date</FormLabel>
@@ -581,7 +609,10 @@ export default function Students() {
                                     </Button>
                                   </FormControl>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
+                                <PopoverContent
+                                  className="w-auto p-0"
+                                  align="start"
+                                >
                                   <Calendar
                                     mode="single"
                                     selected={field.value}
@@ -594,29 +625,35 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="bloodGroup"
+                          name="blood_group"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Blood Group</FormLabel>
                               <FormControl>
-                                <Input placeholder="e.g., A+, B-, O+" {...field} />
+                                <Input
+                                  placeholder="e.g., A+, B-, O+"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="fatherOccupation"
+                          name="fathers_occupation"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Father's Occupation</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter father's occupation" {...field} />
+                                <Input
+                                  placeholder="Enter father's occupation"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -624,99 +661,119 @@ export default function Students() {
                         />
                       </div>
                     </div>
-                    
+
                     <Separator />
-                    
+
                     {/* Contact Information Section */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold border-b pb-2">Contact Information</h3>
-                      
+                      <h3 className="text-lg font-semibold border-b pb-2">
+                        Contact Information
+                      </h3>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-4">
                           <h4 className="font-medium">Permanent Address</h4>
-                          
+
                           <FormField
                             control={form.control}
-                            name="permanentAddress"
+                            name="permanent_address"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Address</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter permanent address" {...field} />
+                                  <Input
+                                    placeholder="Enter permanent address"
+                                    {...field}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
-                            name="permanentMobile"
+                            name="permanent_mobile"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Mobile</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter mobile number" {...field} />
+                                  <Input
+                                    placeholder="Enter mobile number"
+                                    {...field}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
-                            name="permanentEmail"
+                            name="permanent_email"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter email address" {...field} />
+                                  <Input
+                                    placeholder="Enter email address"
+                                    {...field}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
-                        
+
                         <div className="space-y-4">
                           <h4 className="font-medium">Local Address</h4>
-                          
+
                           <FormField
                             control={form.control}
-                            name="localAddress"
+                            name="local_address"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Address</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter local address" {...field} />
+                                  <Input
+                                    placeholder="Enter local address"
+                                    {...field}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
-                            name="localMobile"
+                            name="local_mobile"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Mobile</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter mobile number" {...field} />
+                                  <Input
+                                    placeholder="Enter mobile number"
+                                    {...field}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
-                            name="localEmail"
+                            name="local_email"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Email</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Enter email address" {...field} />
+                                  <Input
+                                    placeholder="Enter email address"
+                                    {...field}
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -725,35 +782,43 @@ export default function Students() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <Separator />
-                    
+
                     {/* Previous Examination Details */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold border-b pb-2">Details of the last qualifying Examination</h3>
-                      
+                      <h3 className="text-lg font-semibold border-b pb-2">
+                        Details of the last qualifying Examination
+                      </h3>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
-                          name="examName"
+                          name="last_exam_name"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Name of the Exam</FormLabel>
                               <FormControl>
-                                <Input placeholder="e.g., SSC, HSC" {...field} />
+                                <Input
+                                  placeholder="e.g., SSC, HSC"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="examClass"
+                          name="last_exam_class"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Class</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Select class" />
@@ -771,53 +836,62 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="faculty"
+                          name="last_exam_faculty"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Faculty</FormLabel>
                               <FormControl>
-                                <Input placeholder="e.g., Science, Arts" {...field} />
+                                <Input
+                                  placeholder="e.g., Science, Arts"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="seatNo"
+                          name="last_exam_seat_no"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Seat No.</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter seat number" {...field} />
+                                <Input
+                                  placeholder="Enter seat number"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="examCenter"
+                          name="last_exam_center"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Exam Center</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter exam center" {...field} />
+                                <Input
+                                  placeholder="Enter exam center"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <div className="grid grid-cols-2 gap-2">
                           <FormField
                             control={form.control}
-                            name="examMonth"
+                            name="last_exam_month"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Month</FormLabel>
@@ -828,10 +902,10 @@ export default function Students() {
                               </FormItem>
                             )}
                           />
-                          
+
                           <FormField
                             control={form.control}
-                            name="examYear"
+                            name="last_exam_year"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Year</FormLabel>
@@ -843,52 +917,65 @@ export default function Students() {
                             )}
                           />
                         </div>
-                        
+
                         <FormField
                           control={form.control}
-                          name="marksObtained"
+                          name="last_exam_marks_obtained"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Marks Obtained</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter marks" {...field} />
+                                <Input
+                                  type="number"
+                                  placeholder="Enter marks"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="marksOutOf"
+                          name="last_exam_out_of"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Out Of</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter total marks" {...field} />
+                                <Input
+                                  type="number"
+                                  placeholder="Enter total marks"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="percentage"
+                          name="last_exam_percentage"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Percentage</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter percentage" {...field} />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Enter percentage"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="classObtained"
+                          name="last_exam_class_obtained"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Class Obtained</FormLabel>
@@ -900,10 +987,10 @@ export default function Students() {
                           )}
                         />
                       </div>
-                      
+
                       <FormField
                         control={form.control}
-                        name="markMemoSubmitted"
+                        name="mark_memo_submitted"
                         render={({ field }) => (
                           <FormItem className="flex flex-row items-start space-x-3 space-y-0 mt-4">
                             <FormControl>
@@ -913,9 +1000,7 @@ export default function Students() {
                               />
                             </FormControl>
                             <div className="space-y-1 leading-none">
-                              <FormLabel>
-                                Mark Memo Submitted
-                              </FormLabel>
+                              <FormLabel>Mark Memo Submitted</FormLabel>
                               <FormDescription>
                                 Check if the mark memo has been submitted
                               </FormDescription>
@@ -925,14 +1010,19 @@ export default function Students() {
                         )}
                       />
                     </div>
-                    
+
                     <Separator />
-                    
+
                     {/* Login Information */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold border-b pb-2">Account Information (Optional)</h3>
-                      <p className="text-sm text-muted-foreground">These details will be used to create a login account for the student.</p>
-                      
+                      <h3 className="text-lg font-semibold border-b pb-2">
+                        Account Information (Optional)
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        These details will be used to create a login account for
+                        the student.
+                      </p>
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
@@ -941,7 +1031,10 @@ export default function Students() {
                             <FormItem>
                               <FormLabel>Username</FormLabel>
                               <FormControl>
-                                <Input placeholder="Leave blank to auto-generate" {...field} />
+                                <Input
+                                  placeholder="Leave blank to auto-generate"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormDescription>
                                 Will be auto-generated if left blank
@@ -950,7 +1043,7 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="password"
@@ -958,7 +1051,11 @@ export default function Students() {
                             <FormItem>
                               <FormLabel>Password</FormLabel>
                               <FormControl>
-                                <Input type="password" placeholder="Leave blank to use default" {...field} />
+                                <Input
+                                  type="password"
+                                  placeholder="Leave blank to use default"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormDescription>
                                 Default: changeme123
@@ -967,15 +1064,18 @@ export default function Students() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
-                          name="email"
+                          name="login_email"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Email (for login)</FormLabel>
                               <FormControl>
-                                <Input placeholder="Leave blank to use permanent email" {...field} />
+                                <Input
+                                  placeholder="Leave blank to use permanent email"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormDescription>
                                 Will use permanent email if blank
@@ -986,13 +1086,15 @@ export default function Students() {
                         />
                       </div>
                     </div>
-                    
+
                     <Separator />
-                    
+
                     {/* Declarations */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold border-b pb-2">Declarations</h3>
-                      
+                      <h3 className="text-lg font-semibold border-b pb-2">
+                        Declarations
+                      </h3>
+
                       <div className="grid grid-cols-1 gap-4">
                         <FormField
                           control={form.control}
@@ -1006,18 +1108,20 @@ export default function Students() {
                                 />
                               </FormControl>
                               <div className="space-y-1 leading-none">
-                                <FormLabel>
-                                  Student Declaration
-                                </FormLabel>
+                                <FormLabel>Student Declaration</FormLabel>
                                 <FormDescription>
-                                  I have read the rules and regulations regarding discipline and good conduct. I assure that if I failed to observe these rules the college authorities can take any disciplinary action against me.
+                                  I have read the rules and regulations
+                                  regarding discipline and good conduct. I
+                                  assure that if I failed to observe these rules
+                                  the college authorities can take any
+                                  disciplinary action against me.
                                 </FormDescription>
                               </div>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={form.control}
                           name="parentDeclaration"
@@ -1030,11 +1134,13 @@ export default function Students() {
                                 />
                               </FormControl>
                               <div className="space-y-1 leading-none">
-                                <FormLabel>
-                                  Parent Declaration
-                                </FormLabel>
+                                <FormLabel>Parent Declaration</FormLabel>
                                 <FormDescription>
-                                  I have read the rules and regulations of the college. I promise to abide by them. I have also read the instructions about changing fees structure. I agree to pay the fees revised from time to time.
+                                  I have read the rules and regulations of the
+                                  college. I promise to abide by them. I have
+                                  also read the instructions about changing fees
+                                  structure. I agree to pay the fees revised
+                                  from time to time.
                                 </FormDescription>
                               </div>
                               <FormMessage />
@@ -1043,7 +1149,7 @@ export default function Students() {
                         />
                       </div>
                     </div>
-                    
+
                     <DialogFooter>
                       <Button
                         type="button"
@@ -1052,7 +1158,7 @@ export default function Students() {
                       >
                         Cancel
                       </Button>
-                      <Button 
+                      <Button
                         type="submit"
                         disabled={registerMutation.isPending}
                       >
@@ -1068,7 +1174,7 @@ export default function Students() {
             </Dialog>
           </div>
         </CardHeader>
-        
+
         <CardContent>
           {isLoading ? (
             <div className="flex justify-center py-8">
@@ -1087,45 +1193,69 @@ export default function Students() {
                     <TableHead>Name</TableHead>
                     <TableHead>Username</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Grade</TableHead>
+                    <TableHead>Class</TableHead>
                     <TableHead>Join Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStudents?.length ? (
-                    filteredStudents.map((student) => (
-                      <TableRow key={student.id}>
-                        <TableCell>
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary text-white text-xs">
-                              {getInitials(student.fullName)}
-                            </AvatarFallback>
-                          </Avatar>
-                        </TableCell>
-                        <TableCell className="font-medium">{student.fullName}</TableCell>
-                        <TableCell>{student.username}</TableCell>
-                        <TableCell>{student.email}</TableCell>
-                        <TableCell>{student.grade || "N/A"}</TableCell>
-                        <TableCell>{formatJoinDate(student.joinDate)}</TableCell>
-                        <TableCell className="text-right">
-                          <Link href={`/student/${student.id}`}>
-                            <Button variant="ghost" size="sm" className="text-primary">
-                              <UserIcon className="mr-1 h-4 w-4" />
-                              Profile
+                  {data?.length ? (
+                    data
+                      .filter(
+                        (student) =>
+                          student.full_name
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          student.username
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase()) ||
+                          student.login_email
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase())
+                      )
+                      .map((student) => (
+                        <TableRow key={student.id}>
+                          <TableCell>
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-primary text-white text-xs">
+                                {getInitials(student.full_name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {student.full_name}
+                          </TableCell>
+                          <TableCell>{student.username}</TableCell>
+                          <TableCell>{student.login_email}</TableCell>
+                          <TableCell>{student.last_exam_class}</TableCell>
+                          <TableCell>
+                            {formatJoinDate(student.created_at)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Link href={`/student/${student.id}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-primary"
+                              >
+                                <UserIcon className="mr-1 h-4 w-4" />
+                                Profile
+                              </Button>
+                            </Link>
+                            <Button variant="ghost" size="sm">
+                              Edit
                             </Button>
-                          </Link>
-                          <Button variant="ghost" size="sm">
-                            Edit
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                          </TableCell>
+                        </TableRow>
+                      ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-4 text-gray-500">
-                        {searchTerm 
-                          ? "No students match your search criteria" 
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-4 text-gray-500"
+                      >
+                        {searchTerm
+                          ? "No students match your search criteria"
                           : "No students have been registered yet"}
                       </TableCell>
                     </TableRow>

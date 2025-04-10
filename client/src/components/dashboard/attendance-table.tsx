@@ -1,6 +1,8 @@
+"use client";
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Attendance } from "@shared/schema";
+
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +16,13 @@ import {
 } from "@/components/ui/table";
 import { ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { supabase } from "@/lib/supabase";
+
+interface RawAttendance {
+  class_id: string;
+  date: string;
+  status: "present" | "absent";
+}
 
 interface AttendanceRecord {
   id: number;
@@ -28,56 +37,51 @@ export const AttendanceTable = () => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
 
   const { isLoading, error } = useQuery({
-    queryKey: ["/api/attendance"],
-    queryFn: async () => {
-      const date = new Date();
-      const dateString = format(date, "yyyy-MM-dd");
-      const res = await fetch(`/api/attendance?date=${dateString}`);
-      if (!res.ok) throw new Error("Failed to fetch attendance data");
-      return await res.json() as Attendance[];
+    queryKey: ["attendance"],
+    queryFn: async (): Promise<RawAttendance[]> => {
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("class_id, date, status")
+        .eq("date", today);
+
+      if (error) throw new Error(error.message);
+      return data || [];
     },
-    onSuccess: (data) => {
-      // Process the attendance data to create record summaries
-      // In a real app, this would likely be done on the server
-      // This is a simplified example
-      
-      // Group by class and count present/absent
+    onSuccess: (data: RawAttendance[]) => {
       const classSummary = data.reduce((acc, record) => {
-        if (!acc[record.classId]) {
-          acc[record.classId] = {
+        if (!acc[record.class_id]) {
+          acc[record.class_id] = {
             present: 0,
             absent: 0,
             date: record.date,
-            className: `Class ${record.classId}` // In a real app, we would fetch class names
+            className: `Class ${record.class_id}`,
           };
         }
-        
-        if (record.status === 'present') {
-          acc[record.classId].present += 1;
-        } else {
-          acc[record.classId].absent += 1;
-        }
-        
+
+        if (record.status === "present") acc[record.class_id].present += 1;
+        else acc[record.class_id].absent += 1;
+
         return acc;
-      }, {} as Record<string, { present: number, absent: number, date: string | Date, className: string }>);
-      
-      // Convert to array format for display
-      const records = Object.entries(classSummary).map(([classId, data], index) => {
-        const total = data.present + data.absent;
-        const rate = total > 0 ? Math.round((data.present / total) * 100) : 0;
-        
+      }, {} as Record<string, { present: number; absent: number; date: string; className: string }>);
+
+      const records = Object.entries(classSummary).map(([classId, summary], index) => {
+        const total = summary.present + summary.absent;
+        const rate = total > 0 ? Math.round((summary.present / total) * 100) : 0;
+
         return {
           id: index + 1,
-          date: typeof data.date === 'string' ? data.date : format(data.date, 'PPP'),
-          className: data.className,
-          present: data.present,
-          absent: data.absent,
-          rate
+          date: summary.date,
+          className: summary.className,
+          present: summary.present,
+          absent: summary.absent,
+          rate,
         };
       });
-      
+
       setAttendanceRecords(records);
-    }
+    },
   });
 
   const getProgressColor = (rate: number) => {
@@ -99,12 +103,12 @@ export const AttendanceTable = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[150px]">Date</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Present</TableHead>
                 <TableHead>Absent</TableHead>
                 <TableHead>Rate</TableHead>
-                <TableHead></TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -154,7 +158,7 @@ export const AttendanceTable = () => {
               <TableHead className="text-xs text-gray-500 uppercase">Present</TableHead>
               <TableHead className="text-xs text-gray-500 uppercase">Absent</TableHead>
               <TableHead className="text-xs text-gray-500 uppercase">Rate</TableHead>
-              <TableHead></TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -167,21 +171,20 @@ export const AttendanceTable = () => {
                   <TableCell>{record.absent}</TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      <span 
+                      <span
                         className={`mr-2 font-medium ${
-                          record.rate >= 90 
-                            ? "text-green-600" 
-                            : record.rate >= 80 
-                              ? "text-amber-500" 
-                              : "text-red-600"
+                          record.rate >= 90
+                            ? "text-green-600"
+                            : record.rate >= 80
+                            ? "text-amber-500"
+                            : "text-red-600"
                         }`}
                       >
                         {record.rate}%
                       </span>
-                      <Progress 
-                        className="w-16 h-2" 
+                      <Progress
                         value={record.rate}
-                        indicatorColor={getProgressColor(record.rate)}
+                        className={`w-16 h-2 ${getProgressColor(record.rate)}`}
                       />
                     </div>
                   </TableCell>

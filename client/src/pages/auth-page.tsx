@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { insertUserSchema } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import { queryClient } from "@/lib/queryClient";
 import {
   Card,
   CardContent,
@@ -163,6 +164,38 @@ export default function AuthPage() {
                         ) : null}
                         Login
                       </Button>
+                      
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-sm text-gray-500 mb-2 text-center">
+                          For testing purposes only
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={async () => {
+                            try {
+                              // Use our debug endpoint to bypass authentication
+                              const res = await fetch('/api/debug/login');
+                              if (res.ok) {
+                                // Refresh user data
+                                queryClient.invalidateQueries({
+                                  queryKey: ['/api/user'],
+                                });
+                                
+                                // Redirect to dashboard
+                                setTimeout(() => {
+                                  navigate('/');
+                                }, 100);
+                              }
+                            } catch (error) {
+                              console.error('Debug login failed:', error);
+                            }
+                          }}
+                        >
+                          Debug Login (Admin)
+                        </Button>
+                      </div>
                     </form>
                   </Form>
                 </CardContent>

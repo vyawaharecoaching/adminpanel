@@ -4,8 +4,8 @@ import 'dotenv/config';
 // Function to create and export Supabase client
 function setupSupabase() {
   // Get Supabase credentials from environment variables
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_API_KEY || '';
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xbsocbjsmrnkwntmfere.supabase.co';
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhic29jYmpzbXJua3dudG1mZXJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2ODgyMTgsImV4cCI6MjA1OTI2NDIxOH0.H__Dla0lmkv8RKsR2jUzPUQX12QM5phsLhC1vWEQEmc';
   let client: any = null;
   
   // Check if Supabase credentials are available
@@ -30,14 +30,11 @@ function setupSupabase() {
     };
   } else {
     // Create Supabase client
-    // IMPORTANT: For this to work without RLS issues, SUPABASE_API_KEY must be a service role key
     client = createClient(supabaseUrl, supabaseKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
       },
-      // Enable row-level security bypass
-      // This works only with a service role key
       db: {
         schema: 'public'
       }

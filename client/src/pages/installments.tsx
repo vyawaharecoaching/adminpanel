@@ -152,7 +152,7 @@ export default function InstallmentsPage() {
     queryKey: ["/api/debug/installments", selectedStudent, selectedStatus],
     queryFn: async () => {
       // Use debug endpoint for test data
-      const res = await fetch("/api/debug/installments");
+      const res = await fetch("/api/installments");
       if (!res.ok) throw new Error("Failed to fetch installments");
       const data = await res.json();
       

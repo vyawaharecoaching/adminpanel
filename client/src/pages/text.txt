@@ -1,0 +1,541 @@
+import { useQuery } from "@tanstack/react-query";
+import { useParams } from "wouter";
+import { PageContainer } from "@/components/layout/page-container";
+import { useState } from "react";
+import { Student, User, Attendance, TestResult, Installment } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { format, parseISO } from "date-fns";
+import { Loader2, User as UserIcon, GraduationCap, Calendar, BookOpen, CreditCard } from "lucide-react";
+
+export default function StudentProfilePage() {
+  const { studentId } = useParams();
+  const [activeTab, setActiveTab] = useState("overview");
+  
+  // Fetch student data
+  const { data: student, isLoading: studentLoading } = useQuery({
+    queryKey: [`/api/user/${studentId}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/user/${studentId}`);
+      if (!res.ok) throw new Error("Failed to fetch student");
+      return await res.json() as User;
+    },
+    enabled: !!studentId,
+  });
+
+  // Fetch student profile details
+  const { data: studentProfile, isLoading: profileLoading } = useQuery({
+    queryKey: [`/api/students/user/${studentId}`],
+    queryFn: async () => {
+      const res = await fetch(`/api/students/user/${studentId}`);
+      if (!res.ok) throw new Error("Failed to fetch student profile");
+      return await res.json() as Student;
+    },
+    enabled: !!studentId,
+  });
+/*  */
+  // Fetch attendance data
+  const { data: attendanceData, isLoading: attendanceLoading } = useQuery({
+    queryKey: ["/api/attendance", studentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/attendance?studentId=${studentId}`);
+      if (!res.ok) throw new Error("Failed to fetch attendance");
+      return await res.json() as Attendance[];
+    },
+    enabled: !!studentId,
+  });
+
+  // Fetch test results
+  const { data: testResults, isLoading: testResultsLoading } = useQuery({
+    queryKey: ["/api/test-results", studentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/test-results?studentId=${studentId}`);
+      if (!res.ok) throw new Error("Failed to fetch test results");
+      return await res.json() as TestResult[];
+    },
+    enabled: !!studentId,
+  });
+
+  // Fetch fee installments
+  const { data: installments, isLoading: installmentsLoading } = useQuery({
+    queryKey: ["/api/installments", studentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/installments?studentId=${studentId}`);
+      if (!res.ok) throw new Error("Failed to fetch installments");
+      return await res.json() as Installment[];
+    },
+    enabled: !!studentId,
+  });
+
+  // Calculate attendance statistics
+  const calculateAttendanceStats = () => {
+    if (!attendanceData || attendanceData.length === 0) return { present: 0, absent: 0, late: 0, total: 0, presentPercentage: 0 };
+    
+    const present = attendanceData.filter(a => a.status === 'present').length;
+    const absent = attendanceData.filter(a => a.status === 'absent').length;
+    const late = attendanceData.filter(a => a.status === 'late').length;
+    const total = attendanceData.length;
+    const presentPercentage = Math.round((present / total) * 100);
+    
+    return { present, absent, late, total, presentPercentage };
+  };
+
+  // Calculate payment statistics
+  const calculatePaymentStats = () => {
+    if (!installments || installments.length === 0) return { paid: 0, pending: 0, overdue: 0, total: 0, paidAmount: 0, pendingAmount: 0, totalAmount: 0 };
+    
+    const paid = installments.filter(i => i.status === 'paid').length;
+    const pending = installments.filter(i => i.status === 'pending').length;
+    const overdue = installments.filter(i => i.status === 'overdue').length;
+    const total = installments.length;
+    
+    const paidAmount = installments.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.amount, 0);
+    const pendingAmount = installments.filter(i => i.status === 'pending' || i.status === 'overdue').reduce((sum, i) => sum + i.amount, 0);
+    const totalAmount = installments.reduce((sum, i) => sum + i.amount, 0);
+    
+    return { paid, pending, overdue, total, paidAmount, pendingAmount, totalAmount };
+  };
+
+  // Calculate academic statistics
+  const calculateAcademicStats = () => {
+    if (!testResults || testResults.length === 0) return { totalTests: 0, averageScore: 0, highestScore: 0, lowestScore: 0 };
+    
+    const totalTests = testResults.length;
+    const scores = testResults.map(t => Math.round((t.score / t.maxScore) * 100));
+    const averageScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / totalTests);
+    const highestScore = Math.max(...scores);
+    const lowestScore = Math.min(...scores);
+    
+    return { totalTests, averageScore, highestScore, lowestScore };
+  };
+
+  // Format date
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return 'N/A';
+    const parsedDate = typeof date === 'string' ? parseISO(date) : date;
+    return format(parsedDate, 'PPP');
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "present":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Present</Badge>;
+      case "absent":
+        return <Badge variant="destructive">Absent</Badge>;
+      case "late":
+        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Late</Badge>;
+      case "paid":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Paid</Badge>;
+      case "pending":
+        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Pending</Badge>;
+      case "overdue":
+        return <Badge variant="destructive">Overdue</Badge>;
+      case "graded":
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Graded</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+    }).format(amount);
+  };
+
+  // Calculate grade color
+  const getScoreColor = (percentage: number) => {
+    if (percentage >= 80) return "text-green-600";
+    if (percentage >= 70) return "text-amber-600";
+    if (percentage >= 60) return "text-orange-600";
+    return "text-red-600";
+  };
+
+  const isLoading = studentLoading || profileLoading || attendanceLoading || testResultsLoading || installmentsLoading;
+
+  if (isLoading) {
+    return (
+      <PageContainer title="Student Profile" subtitle="Loading...">
+        <div className="flex justify-center items-center min-h-[400px]">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        </div>
+      </PageContainer>
+    );
+  }
+
+  if (!student) {
+    return (
+      <PageContainer title="Student Profile" subtitle="Student not found">
+        <div className="flex justify-center items-center min-h-[400px]">
+          <div className="text-center">
+            <h2 className="text-xl font-bold text-gray-800 mb-2">Student Not Found</h2>
+            <p className="text-gray-600">The requested student profile could not be found.</p>
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  const attendanceStats = calculateAttendanceStats();
+  const paymentStats = calculatePaymentStats();
+  const academicStats = calculateAcademicStats();
+
+  return (
+    <PageContainer
+      title={`${student.fullName}'s Profile`}
+      subtitle={`Class: ${student.grade || 'Not assigned'} | ID: ${student.id}`}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* Student Info Card */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center">
+              <UserIcon className="mr-2 h-5 w-5 text-primary" />
+              Personal Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center mb-4">
+              <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-primary text-4xl font-bold mb-3">
+                {student.fullName.charAt(0)}
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">{student.fullName}</h3>
+              <p className="text-gray-600">{student.email}</p>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Username</span>
+                <span className="font-medium">{student.username}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Role</span>
+                <span className="font-medium capitalize">{student.role}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Join Date</span>
+                <span className="font-medium">{formatDate(student.joinDate)}</span>
+              </div>
+              {studentProfile && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Parent Name</span>
+                    <span className="font-medium">{studentProfile.parentName || 'Not provided'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Phone</span>
+                    <span className="font-medium">{studentProfile.phone || 'Not provided'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Address</span>
+                    <span className="font-medium">{studentProfile.address || 'Not provided'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Date of Birth</span>
+                    <span className="font-medium">{studentProfile.dateOfBirth ? formatDate(studentProfile.dateOfBirth) : 'Not provided'}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Attendance Summary Card */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center">
+              <Calendar className="mr-2 h-5 w-5 text-primary" />
+              Attendance Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full">
+                  <span className="text-2xl font-bold text-primary">{attendanceStats.presentPercentage}%</span>
+                </div>
+                <h4 className="mt-2 font-medium">Attendance Rate</h4>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Present</span>
+                  <span className="text-sm font-medium">
+                    {attendanceStats.present} / {attendanceStats.total}
+                  </span>
+                </div>
+                <Progress value={attendanceStats.total ? (attendanceStats.present / attendanceStats.total) * 100 : 0} className="h-2" />
+                
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm text-gray-600">Absent</span>
+                  <span className="text-sm font-medium">
+                    {attendanceStats.absent} / {attendanceStats.total}
+                  </span>
+                </div>
+                <Progress value={attendanceStats.total ? (attendanceStats.absent / attendanceStats.total) * 100 : 0} className="h-2 bg-gray-200">
+                  <div className="h-full bg-red-500 rounded-full" style={{ width: `${attendanceStats.total ? (attendanceStats.absent / attendanceStats.total) * 100 : 0}%` }} />
+                </Progress>
+                
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm text-gray-600">Late</span>
+                  <span className="text-sm font-medium">
+                    {attendanceStats.late} / {attendanceStats.total}
+                  </span>
+                </div>
+                <Progress value={attendanceStats.total ? (attendanceStats.late / attendanceStats.total) * 100 : 0} className="h-2 bg-gray-200">
+                  <div className="h-full bg-amber-500 rounded-full" style={{ width: `${attendanceStats.total ? (attendanceStats.late / attendanceStats.total) * 100 : 0}%` }} />
+                </Progress>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Academic Performance Card */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center">
+              <GraduationCap className="mr-2 h-5 w-5 text-primary" />
+              Academic Performance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-full">
+                  <span className={`text-2xl font-bold ${getScoreColor(academicStats.averageScore)}`}>
+                    {academicStats.averageScore || 0}%
+                  </span>
+                </div>
+                <h4 className="mt-2 font-medium">Average Score</h4>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 mt-4">
+                <div className="text-center p-2 bg-gray-50 rounded-lg">
+                  <div className="text-lg font-bold">{academicStats.totalTests}</div>
+                  <div className="text-xs text-gray-600">Total Tests</div>
+                </div>
+                <div className="text-center p-2 bg-gray-50 rounded-lg">
+                  <div className={`text-lg font-bold ${getScoreColor(academicStats.highestScore)}`}>
+                    {academicStats.highestScore || 0}%
+                  </div>
+                  <div className="text-xs text-gray-600">Highest</div>
+                </div>
+                <div className="text-center p-2 bg-gray-50 rounded-lg">
+                  <div className={`text-lg font-bold ${getScoreColor(academicStats.lowestScore)}`}>
+                    {academicStats.lowestScore || 0}%
+                  </div>
+                  <div className="text-xs text-gray-600">Lowest</div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Fee Summary Card */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center">
+            <CreditCard className="mr-2 h-5 w-5 text-primary" />
+            Fee Payment Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="text-lg font-medium text-gray-800">Total Fee</div>
+              <div className="text-2xl font-bold">{formatCurrency(paymentStats.totalAmount)}</div>
+              <div className="mt-2 text-sm text-gray-600">{paymentStats.total} installments</div>
+            </div>
+            
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="text-lg font-medium text-green-800">Paid Amount</div>
+              <div className="text-2xl font-bold text-green-700">{formatCurrency(paymentStats.paidAmount)}</div>
+              <div className="mt-2 text-sm text-green-700">{paymentStats.paid} payments completed</div>
+            </div>
+            
+            <div className="bg-amber-50 p-4 rounded-lg">
+              <div className="text-lg font-medium text-amber-800">Pending Amount</div>
+              <div className="text-2xl font-bold text-amber-700">{formatCurrency(paymentStats.pendingAmount)}</div>
+              <div className="mt-2 flex justify-between">
+                <span className="text-sm text-amber-700">{paymentStats.pending} pending</span>
+                <span className="text-sm text-red-700">{paymentStats.overdue} overdue</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-3 mb-6">
+          <TabsTrigger value="overview">
+            <BookOpen className="mr-2 h-4 w-4" />
+            Academic Details
+          </TabsTrigger>
+          <TabsTrigger value="attendance">
+            <Calendar className="mr-2 h-4 w-4" />
+            Attendance Details
+          </TabsTrigger>
+          <TabsTrigger value="payments">
+            <CreditCard className="mr-2 h-4 w-4" />
+            Payment Details
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Academic Details Tab */}
+        <TabsContent value="overview">
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Results</CardTitle>
+              <CardDescription>Academic performance across all tests</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {testResults && testResults.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Test Name</TableHead>
+                      <TableHead>Class</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {testResults.map((result) => {
+                      const percentage = Math.round((result.score / result.maxScore) * 100);
+                      return (
+                        <TableRow key={result.id}>
+                          <TableCell className="font-medium">{result.name}</TableCell>
+                          <TableCell>Class {result.classId}</TableCell>
+                          <TableCell>{formatDate(result.date)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center">
+                              <span className={`mr-2 font-medium ${getScoreColor(percentage)}`}>
+                                {result.score}/{result.maxScore} ({percentage}%)
+                              </span>
+                              <Progress
+                                value={percentage}
+                                className="w-16 h-2"
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell>{getStatusBadge(result.status)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  No test results found for this student.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Attendance Details Tab */}
+        <TabsContent value="attendance">
+          <Card>
+            <CardHeader>
+              <CardTitle>Attendance Records</CardTitle>
+              <CardDescription>Daily attendance history</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {attendanceData && attendanceData.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Class</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Sort by date, newest first */}
+                    {[...attendanceData]
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell>{formatDate(record.date)}</TableCell>
+                          <TableCell>Class {record.classId}</TableCell>
+                          <TableCell>{getStatusBadge(record.status)}</TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  No attendance records found for this student.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Payment Details Tab */}
+        <TabsContent value="payments">
+          <Card>
+            <CardHeader>
+              <CardTitle>Fee Installments</CardTitle>
+              <CardDescription>Payment history and upcoming installments</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {installments && installments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Payment Date</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Sort by due date, oldest first */}
+                    {[...installments]
+                      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+                      .map((installment) => (
+                        <TableRow key={installment.id}>
+                          <TableCell>{formatDate(installment.dueDate)}</TableCell>
+                          <TableCell>{formatCurrency(installment.amount)}</TableCell>
+                          <TableCell>
+                            {installment.paymentDate ? formatDate(installment.paymentDate) : 'Not paid'}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(installment.status)}</TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  No fee installments found for this student.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </PageContainer>
+  );
+}
