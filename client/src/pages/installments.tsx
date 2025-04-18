@@ -1,13 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Installment, InsertInstallment } from "@shared/schema";
-
-// Define the student interface for type safety
-interface Student {
-  id: number;
-  fullName: string;
-  role: string;
-  grade?: string;
-}
 import { PageContainer } from "@/components/layout/page-container";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 import {
   Table,
   TableBody,
@@ -47,12 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Form,
   FormControl,
@@ -67,23 +55,39 @@ import { Progress } from "@/components/ui/progress";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { 
-  CalendarIcon, 
-  CheckCircle, 
-  CreditCard, 
-  Loader2, 
-  PlusCircle, 
-  Search, 
+import {
+  CalendarIcon,
+  CheckCircle,
+  CreditCard,
+  Loader2,
+  PlusCircle,
+  Search,
   Bell,
   Share2,
-  MessageSquare
+  MessageSquare,
 } from "lucide-react";
-import { FaWhatsapp, FaFacebook, FaTwitter, FaEnvelope, FaSms } from "react-icons/fa";
-import { format, isBefore, parseISO } from "date-fns";
+import {
+  FaWhatsapp,
+  FaFacebook,
+  FaTwitter,
+  FaEnvelope,
+  FaSms,
+} from "react-icons/fa";
+import { format, parseISO } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+
+// Define the student interface for type safety
+interface Student {
+  id: string;
+  fullName: string;
+}
 
 // Schema for installments filtering
 const filterSchema = z.object({
@@ -118,66 +122,103 @@ const updateInstallmentSchema = z.object({
 
 type UpdateInstallmentValues = z.infer<typeof updateInstallmentSchema>;
 
-
-
 export default function InstallmentsPage() {
   const [currentTab, setCurrentTab] = useState<string>("view");
   const [selectedStudent, setSelectedStudent] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null);
+  const [selectedInstallment, setSelectedInstallment] =
+    useState<Installment | null>(null);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false);
+  const [isNotificationDialogOpen, setIsNotificationDialogOpen] =
+    useState(false);
   const [notificationMessage, setNotificationMessage] = useState<string>("");
-  
+
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   // Get students for dropdown
-  const { data: studentsData } = useQuery<Student[]>({
-    queryKey: ["/api/debug/students"],
+  const {
+    isLoading,
+    error,
+    data: studentsData,
+  } = useQuery<Student[]>({
+    queryKey: ["students"],
     queryFn: async () => {
-      const res = await fetch("/api/debug/students");
-      if (!res.ok) throw new Error("Failed to fetch students");
-      return await res.json() as Student[];
+      try {
+        const response = await fetch("/api/students");
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+
+        // Assuming the API returns an array of students with a 'full_name' property
+        return result.data.map(
+          (student: { id: string; full_name: string }) => ({
+            id: student.id,
+            fullName: student.full_name,
+          })
+        );
+      } catch (error) {
+        throw new Error(`Failed to fetch students: ${error.message}`);
+      }
     },
   });
 
-  // Get installments based on filters (using debug endpoint for test data)
+  // Get installments based on filters
   const {
     data: installmentsData,
     isLoading: installmentsLoading,
     refetch: refetchInstallments,
-  } = useQuery({
-    queryKey: ["/api/debug/installments", selectedStudent, selectedStatus],
+  } = useQuery<Installment[]>({
+    queryKey: ["installments", selectedStudent, selectedStatus],
     queryFn: async () => {
-      // Use debug endpoint for test data
-      const res = await fetch("/api/installments");
-      if (!res.ok) throw new Error("Failed to fetch installments");
-      const data = await res.json();
-      
-      // Filter the data based on selection
-      if (selectedStatus && selectedStatus !== "all") {
-        return data[selectedStatus] || [];
+      let query = supabase.from("installments").select("*");
+
+      if (selectedStudent && selectedStudent !== "all") {
+        query = query.eq("student_Id", selectedStudent);
       }
-      
-      return data.all as Installment[];
+
+      if (selectedStatus && selectedStatus !== "all") {
+        query = query.eq("status", selectedStatus);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data as Installment[];
     },
-    enabled: true,
   });
 
   // Create installment mutation
   const createInstallmentMutation = useMutation({
     mutationFn: async (data: InsertInstallment) => {
-      const res = await apiRequest("POST", "/api/installments", data);
-      return await res.json();
+      const { data: result, error } = await supabase
+        .from("installments")
+        .insert([
+          {
+            student_Id: data.studentId,
+            amount: data.amount,
+            due_date: data.dueDate.toISOString(),
+            status: data.status,
+            payment_date: data.paymentDate
+              ? data.paymentDate.toISOString()
+              : null,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
     },
     onSuccess: () => {
       toast({
         title: "Installment created",
         description: "The installment has been created successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/installments"] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
       installmentForm.reset();
     },
     onError: (error: Error) => {
@@ -191,16 +232,34 @@ export default function InstallmentsPage() {
 
   // Update installment mutation
   const updateInstallmentMutation = useMutation({
-    mutationFn: async ({ id, status, paymentDate }: { id: number; status: string; paymentDate?: string }) => {
-      const res = await apiRequest("PATCH", `/api/installments/${id}`, { status, paymentDate });
-      return await res.json();
+    mutationFn: async ({
+      id,
+      status,
+      paymentDate,
+    }: {
+      id: string;
+      status: string;
+      paymentDate?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("installments")
+        .update({
+          status,
+          payment_date: paymentDate || null,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       toast({
         title: "Installment updated",
         description: "The installment has been updated successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/installments"] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
       setIsUpdateDialogOpen(false);
       setIsPaymentDialogOpen(false);
     },
@@ -243,28 +302,29 @@ export default function InstallmentsPage() {
 
   const onSubmitInstallment = (data: InstallmentValues) => {
     createInstallmentMutation.mutate({
-      studentId: parseInt(data.studentId),
+      studentId: data.studentId,
       amount: data.amount,
-      dueDate: data.dueDate.toISOString(),
+      dueDate: data.dueDate,
       status: data.status,
-      paymentDate: data.paymentDate ? data.paymentDate.toISOString() : undefined,
+      paymentDate: data.paymentDate,
     });
   };
 
   const onSubmitUpdateInstallment = (data: UpdateInstallmentValues) => {
     if (!selectedInstallment) return;
-    
+
     updateInstallmentMutation.mutate({
       id: selectedInstallment.id,
       status: data.status,
-      paymentDate: data.paymentDate ? data.paymentDate.toISOString() : undefined,
+      paymentDate: data.paymentDate
+        ? data.paymentDate.toISOString()
+        : undefined,
     });
   };
 
   const onSubmitFilter = (data: FilterValues) => {
-    // Use actual values for filtering
-    setSelectedStudent(data.studentId === "all" ? "all" : (data.studentId || ""));
-    setSelectedStatus(data.status === "all" ? "all" : (data.status || ""));
+    setSelectedStudent(data.studentId === "all" ? "all" : data.studentId || "");
+    setSelectedStatus(data.status === "all" ? "all" : data.status || "");
     refetchInstallments();
   };
 
@@ -272,43 +332,61 @@ export default function InstallmentsPage() {
     setSelectedInstallment(installment);
     updateInstallmentForm.reset({
       status: installment.status as "paid" | "pending" | "overdue",
-      paymentDate: installment.paymentDate ? new Date(installment.paymentDate) : undefined,
+      paymentDate: installment.paymentDate
+        ? new Date(installment.paymentDate)
+        : undefined,
     });
     setIsUpdateDialogOpen(true);
   };
 
   const handleSendNotification = (installment: Installment) => {
     setSelectedInstallment(installment);
-    
+
     // Find student details if available
-    const student = studentsData?.find((s: Student) => s.id === installment.studentId);
-    const studentName = student ? student.fullName : `Student ID: ${installment.studentId}`;
-    
+    const student = studentsData?.find(
+      (s: Student) => s.id === installment.studentId
+    );
+    const studentName = student
+      ? student.fullName
+      : `Student ID: ${installment.studentId}`;
+
     // Create pre-typed message
-    const message = `Dear ${studentName},\n\nThis is a friendly reminder that your installment of ${formatCurrency(installment.amount)} was due on ${formatDate(installment.dueDate)}.\n\nPlease arrange for payment at your earliest convenience.\n\nThank you,\nVyawahare Coaching Classes`;
-    
+    const message = `Dear ${studentName},\n\nThis is a friendly reminder that your installment of ${formatCurrency(
+      installment.amount
+    )} was due on ${formatDate(
+      installment.dueDate
+    )}.\n\nPlease arrange for payment at your earliest convenience.\n\nThank you,\nVyawahare Coaching Classes`;
+
     setNotificationMessage(message);
     setIsNotificationDialogOpen(true);
   };
-  
+
   // Function to handle sharing on social media
   const handleShare = (platform: string) => {
     if (!selectedInstallment || !notificationMessage) return;
-    
+
     let shareUrl = "";
-    
-    switch(platform) {
+
+    switch (platform) {
       case "whatsapp":
-        shareUrl = `https://wa.me/?text=${encodeURIComponent(notificationMessage)}`;
+        shareUrl = `https://wa.me/?text=${encodeURIComponent(
+          notificationMessage
+        )}`;
         break;
       case "facebook":
-        shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}&quote=${encodeURIComponent(notificationMessage)}`;
+        shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          window.location.href
+        )}&quote=${encodeURIComponent(notificationMessage)}`;
         break;
       case "twitter":
-        shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(notificationMessage)}`;
+        shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+          notificationMessage
+        )}`;
         break;
       case "email":
-        shareUrl = `mailto:?subject=Payment Reminder&body=${encodeURIComponent(notificationMessage)}`;
+        shareUrl = `mailto:?subject=Payment Reminder&body=${encodeURIComponent(
+          notificationMessage
+        )}`;
         break;
       case "sms":
         shareUrl = `sms:?body=${encodeURIComponent(notificationMessage)}`;
@@ -316,10 +394,10 @@ export default function InstallmentsPage() {
       default:
         break;
     }
-    
+
     if (shareUrl) {
       window.open(shareUrl, "_blank");
-      
+
       toast({
         title: "Notification shared",
         description: `Payment reminder has been shared on ${platform}`,
@@ -329,28 +407,49 @@ export default function InstallmentsPage() {
 
   // Format currency
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
     }).format(amount);
   };
 
   // Format date for display
   const formatDate = (date: string | Date | null | undefined) => {
     if (!date) return "N/A";
-    const parsedDate = typeof date === 'string' ? parseISO(date) : date;
-    return format(parsedDate, 'PPP');
+    const parsedDate = typeof date === "string" ? parseISO(date) : date;
+    return format(parsedDate, "PPP");
   };
 
   // Get status badge color
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "paid":
-        return <Badge variant="outline" className="bg-green-100 text-green-800 hover:bg-green-100">Paid</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="bg-green-100 text-green-800 hover:bg-green-100"
+          >
+            Paid
+          </Badge>
+        );
       case "pending":
-        return <Badge variant="outline" className="bg-amber-100 text-amber-800 hover:bg-amber-100">Pending</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-100 text-amber-800 hover:bg-amber-100"
+          >
+            Pending
+          </Badge>
+        );
       case "overdue":
-        return <Badge variant="outline" className="bg-red-100 text-red-800 hover:bg-red-100">Overdue</Badge>;
+        return (
+          <Badge
+            variant="outline"
+            className="bg-red-100 text-red-800 hover:bg-red-100"
+          >
+            Overdue
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -364,12 +463,14 @@ export default function InstallmentsPage() {
       title="Financial Installments"
       subtitle="Manage and track student payment installments"
     >
-      <Tabs defaultValue="view" value={currentTab} onValueChange={setCurrentTab}>
+      <Tabs
+        defaultValue="view"
+        value={currentTab}
+        onValueChange={setCurrentTab}
+      >
         <TabsList className="grid w-full grid-cols-2 mb-6">
           <TabsTrigger value="view">View Installments</TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger value="add">Add Installment</TabsTrigger>
-          )}
+          {isAdmin && <TabsTrigger value="add">Add Installment</TabsTrigger>}
         </TabsList>
 
         {/* View Installments Tab */}
@@ -383,8 +484,8 @@ export default function InstallmentsPage() {
             </CardHeader>
             <CardContent>
               <Form {...filterForm}>
-                <form 
-                  onSubmit={filterForm.handleSubmit(onSubmitFilter)} 
+                <form
+                  onSubmit={filterForm.handleSubmit(onSubmitFilter)}
                   className="flex flex-col sm:flex-row gap-4 mb-6"
                 >
                   <FormField
@@ -393,8 +494,8 @@ export default function InstallmentsPage() {
                     render={({ field }) => (
                       <FormItem className="flex-1">
                         <FormLabel>Student</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
+                        <Select
+                          onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
                           <FormControl>
@@ -405,7 +506,10 @@ export default function InstallmentsPage() {
                           <SelectContent>
                             <SelectItem value="all">All Students</SelectItem>
                             {studentsData?.map((student: Student) => (
-                              <SelectItem key={student.id} value={student.id.toString()}>
+                              <SelectItem
+                                key={student.id}
+                                value={student.id.toString()}
+                              >
                                 {student.fullName}
                               </SelectItem>
                             ))}
@@ -415,15 +519,15 @@ export default function InstallmentsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   <FormField
                     control={filterForm.control}
                     name="status"
                     render={({ field }) => (
                       <FormItem className="flex-1">
                         <FormLabel>Status</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
+                        <Select
+                          onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
                           <FormControl>
@@ -443,10 +547,7 @@ export default function InstallmentsPage() {
                     )}
                   />
 
-                  <Button 
-                    type="submit" 
-                    className="mt-8"
-                  >
+                  <Button type="submit" className="mt-8">
                     Filter Installments
                   </Button>
                 </form>
@@ -471,42 +572,85 @@ export default function InstallmentsPage() {
                     </TableHeader>
                     <TableBody>
                       {installmentsData && installmentsData.length > 0 ? (
-                        installmentsData.map((installment: Installment) => (
-                          <TableRow key={installment.id}>
-                            <TableCell>{installment.studentId}</TableCell>
-                            <TableCell>{formatCurrency(installment.amount)}</TableCell>
-                            <TableCell>{formatDate(installment.dueDate)}</TableCell>
-                            <TableCell>{formatDate(installment.paymentDate)}</TableCell>
-                            <TableCell>{getStatusBadge(installment.status)}</TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                {isAdmin && (
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => openUpdateDialog(installment)}
-                                  >
-                                    Edit
-                                  </Button>
-                                )}
-                                {(isAdmin || user?.role === "teacher") && 
-                                  installment.status !== "paid" && (
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => handleSendNotification(installment)}
-                                  >
-                                    <Bell className="h-4 w-4 mr-1" />
-                                    Send Notification
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        installmentsData.map((installment: Installment) => {
+                          // Safely find student with null checks
+                          const student = studentsData?.find((s: Student) => {
+                            // Handle cases where either ID might be null/undefined
+                            const studentId = s?.id?.toString()?.trim();
+                            const installmentStudentId = installment?.studentId
+                              ?.toString()
+                              ?.trim();
+                            return (
+                              studentId &&
+                              installmentStudentId &&
+                              studentId === installmentStudentId
+                            );
+                          });
+
+                          console.log("Installment:", {
+                            id: installment.id,
+                            studentId: installment.studentId,
+                            studentFound: !!student,
+                            studentName: student?.fullName,
+                          });
+
+                          return (
+                            <TableRow key={installment.id}>
+                              <TableCell>
+                                {student?.fullName ||
+                                  `Unknown Student (ID: ${
+                                    installment.studentId || "N/A"
+                                  })`}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(installment.amount)}
+                              </TableCell>
+                              <TableCell>
+                                {formatDate(installment.dueDate)}
+                              </TableCell>
+                              <TableCell>
+                                {formatDate(installment.paymentDate)}
+                              </TableCell>
+                              <TableCell>
+                                {getStatusBadge(installment.status)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  {isAdmin && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        openUpdateDialog(installment)
+                                      }
+                                    >
+                                      Edit
+                                    </Button>
+                                  )}
+                                  {(isAdmin || user?.role === "teacher") &&
+                                    installment.status !== "paid" && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleSendNotification(installment)
+                                        }
+                                      >
+                                        <Bell className="h-4 w-4 mr-1" />
+                                        Send Notification
+                                      </Button>
+                                    )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                          <TableCell
+                            colSpan={6}
+                            className="text-center py-6 text-gray-500"
+                          >
                             No installments found for the selected filters.
                           </TableCell>
                         </TableRow>
@@ -531,7 +675,10 @@ export default function InstallmentsPage() {
               </CardHeader>
               <CardContent>
                 <Form {...installmentForm}>
-                  <form onSubmit={installmentForm.handleSubmit(onSubmitInstallment)} className="space-y-6">
+                  <form
+                    onSubmit={installmentForm.handleSubmit(onSubmitInstallment)}
+                    className="space-y-6"
+                  >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField
                         control={installmentForm.control}
@@ -539,8 +686,8 @@ export default function InstallmentsPage() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Student</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
+                            <Select
+                              onValueChange={field.onChange}
                               defaultValue={field.value}
                             >
                               <FormControl>
@@ -550,7 +697,10 @@ export default function InstallmentsPage() {
                               </FormControl>
                               <SelectContent>
                                 {studentsData?.map((student: Student) => (
-                                  <SelectItem key={student.id} value={student.id.toString()}>
+                                  <SelectItem
+                                    key={student.id}
+                                    value={student.id.toString()}
+                                  >
                                     {student.fullName}
                                   </SelectItem>
                                 ))}
@@ -560,7 +710,7 @@ export default function InstallmentsPage() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={installmentForm.control}
                         name="amount"
@@ -568,20 +718,22 @@ export default function InstallmentsPage() {
                           <FormItem>
                             <FormLabel>Amount</FormLabel>
                             <FormControl>
-                              <Input 
-                                type="number" 
-                                min="0.01" 
-                                step="0.01" 
+                              <Input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
                                 placeholder="0.00"
                                 {...field}
-                                onChange={(e) => field.onChange(parseFloat(e.target.value))} 
+                                onChange={(e) =>
+                                  field.onChange(parseFloat(e.target.value))
+                                }
                               />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={installmentForm.control}
                         name="dueDate"
@@ -607,7 +759,10 @@ export default function InstallmentsPage() {
                                   </Button>
                                 </FormControl>
                               </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
+                              <PopoverContent
+                                className="w-auto p-0"
+                                align="start"
+                              >
                                 <Calendar
                                   mode="single"
                                   selected={field.value}
@@ -620,15 +775,15 @@ export default function InstallmentsPage() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={installmentForm.control}
                         name="status"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Status</FormLabel>
-                            <Select 
-                              onValueChange={field.onChange} 
+                            <Select
+                              onValueChange={field.onChange}
                               defaultValue={field.value}
                             >
                               <FormControl>
@@ -646,7 +801,7 @@ export default function InstallmentsPage() {
                           </FormItem>
                         )}
                       />
-                      
+
                       {installmentForm.watch("status") === "paid" && (
                         <FormField
                           control={installmentForm.control}
@@ -673,7 +828,10 @@ export default function InstallmentsPage() {
                                     </Button>
                                   </FormControl>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
+                                <PopoverContent
+                                  className="w-auto p-0"
+                                  align="start"
+                                >
                                   <Calendar
                                     mode="single"
                                     selected={field.value}
@@ -688,9 +846,9 @@ export default function InstallmentsPage() {
                         />
                       )}
                     </div>
-                    
-                    <Button 
-                      type="submit" 
+
+                    <Button
+                      type="submit"
                       className="w-full md:w-auto"
                       disabled={createInstallmentMutation.isPending}
                     >
@@ -719,29 +877,38 @@ export default function InstallmentsPage() {
                 Update the status and payment details for this installment.
               </DialogDescription>
             </DialogHeader>
-            
+
             <Form {...updateInstallmentForm}>
-              <form onSubmit={updateInstallmentForm.handleSubmit(onSubmitUpdateInstallment)} className="space-y-4">
+              <form
+                onSubmit={updateInstallmentForm.handleSubmit(
+                  onSubmitUpdateInstallment
+                )}
+                className="space-y-4"
+              >
                 <div className="grid gap-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h4 className="text-sm font-medium mb-1">Amount</h4>
-                      <p className="text-sm">{formatCurrency(selectedInstallment.amount)}</p>
+                      <p className="text-sm">
+                        {formatCurrency(selectedInstallment.amount)}
+                      </p>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium mb-1">Due Date</h4>
-                      <p className="text-sm">{formatDate(selectedInstallment.dueDate)}</p>
+                      <p className="text-sm">
+                        {formatDate(selectedInstallment.dueDate)}
+                      </p>
                     </div>
                   </div>
-                  
+
                   <FormField
                     control={updateInstallmentForm.control}
                     name="status"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
+                        <Select
+                          onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
                           <FormControl>
@@ -759,7 +926,7 @@ export default function InstallmentsPage() {
                       </FormItem>
                     )}
                   />
-                  
+
                   {updateInstallmentForm.watch("status") === "paid" && (
                     <FormField
                       control={updateInstallmentForm.control}
@@ -786,7 +953,10 @@ export default function InstallmentsPage() {
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
                               <Calendar
                                 mode="single"
                                 selected={field.value}
@@ -801,16 +971,16 @@ export default function InstallmentsPage() {
                     />
                   )}
                 </div>
-                
+
                 <DialogFooter>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => setIsUpdateDialogOpen(false)}
                   >
                     Cancel
                   </Button>
-                  <Button 
+                  <Button
                     type="submit"
                     disabled={updateInstallmentMutation.isPending}
                   >
@@ -828,7 +998,10 @@ export default function InstallmentsPage() {
 
       {/* Payment Confirmation Dialog */}
       {selectedInstallment && (
-        <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <Dialog
+          open={isPaymentDialogOpen}
+          onOpenChange={setIsPaymentDialogOpen}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Confirm Payment</DialogTitle>
@@ -836,34 +1009,38 @@ export default function InstallmentsPage() {
                 Are you sure you want to mark this installment as paid?
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h4 className="text-sm font-medium mb-1">Amount</h4>
-                  <p className="text-lg font-semibold">{formatCurrency(selectedInstallment.amount)}</p>
+                  <p className="text-lg font-semibold">
+                    {formatCurrency(selectedInstallment.amount)}
+                  </p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium mb-1">Due Date</h4>
-                  <p className="text-sm">{formatDate(selectedInstallment.dueDate)}</p>
+                  <p className="text-sm">
+                    {formatDate(selectedInstallment.dueDate)}
+                  </p>
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-sm font-medium mb-1">Payment Date</h4>
-                <p className="text-sm">{format(new Date(), 'PPP')}</p>
+                <p className="text-sm">{format(new Date(), "PPP")}</p>
               </div>
             </div>
-            
+
             <DialogFooter>
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setIsPaymentDialogOpen(false)}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="button"
                 onClick={() => {
                   updateInstallmentMutation.mutate({
@@ -885,18 +1062,22 @@ export default function InstallmentsPage() {
           </DialogContent>
         </Dialog>
       )}
-      
+
       {/* Notification Dialog */}
       {selectedInstallment && (
-        <Dialog open={isNotificationDialogOpen} onOpenChange={setIsNotificationDialogOpen}>
+        <Dialog
+          open={isNotificationDialogOpen}
+          onOpenChange={setIsNotificationDialogOpen}
+        >
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Send Payment Reminder</DialogTitle>
               <DialogDescription>
-                Send a payment reminder for this installment via social media or other messaging channels.
+                Send a payment reminder for this installment via social media or
+                other messaging channels.
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
                 <div>
@@ -905,25 +1086,29 @@ export default function InstallmentsPage() {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium mb-1">Amount</h4>
-                  <p className="text-lg font-semibold">{formatCurrency(selectedInstallment.amount)}</p>
+                  <p className="text-lg font-semibold">
+                    {formatCurrency(selectedInstallment.amount)}
+                  </p>
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-sm font-medium mb-1">Due Date</h4>
-                <p className="text-sm">{formatDate(selectedInstallment.dueDate)}</p>
+                <p className="text-sm">
+                  {formatDate(selectedInstallment.dueDate)}
+                </p>
               </div>
-              
+
               <div className="mt-2">
                 <h4 className="text-sm font-medium mb-2">Message</h4>
-                <Textarea 
+                <Textarea
                   value={notificationMessage}
                   onChange={(e) => setNotificationMessage(e.target.value)}
                   className="h-32 resize-none"
                 />
               </div>
             </div>
-            
+
             <div className="mt-2">
               <h4 className="text-sm font-medium mb-3">Share via</h4>
               <div className="flex flex-wrap gap-3">
@@ -974,21 +1159,22 @@ export default function InstallmentsPage() {
                 </Button>
               </div>
             </div>
-            
+
             <DialogFooter className="mt-6">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setIsNotificationDialogOpen(false)}
               >
                 Close
               </Button>
-              <Button 
+              <Button
                 type="button"
                 onClick={() => {
                   toast({
                     title: "Notification prepared",
-                    description: "Choose a messaging platform to send the notification.",
+                    description:
+                      "Choose a messaging platform to send the notification.",
                   });
                 }}
               >

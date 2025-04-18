@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   CalendarIcon,
+  EditIcon,
   Loader2,
   PlusCircle,
   Search,
@@ -76,7 +77,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
-import { log } from "console";
+
 
 // Define the form schema
 const studentRegistrationSchema = z.object({
@@ -1242,9 +1243,18 @@ export default function Students() {
                                 Profile
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="sm">
-                              Edit
-                            </Button>
+
+                            <Link href={`/edit/${student.id}`}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-primary"
+                              >
+                                <EditIcon className="mr-1 h-4 w-4" />
+                                Edit
+                              </Button>
+                            </Link>
+
                           </TableCell>
                         </TableRow>
                       ))

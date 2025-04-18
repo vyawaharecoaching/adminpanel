@@ -148,7 +148,7 @@ export default function StudentRegistrationPage() {
         formData.append("photo", photoFile);
       }
       
-      const res = await fetch("/api/student-registration", {
+      const res = await fetch("/api/students", {
         method: "POST",
         body: formData,
       });
