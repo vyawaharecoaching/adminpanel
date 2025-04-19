@@ -4,7 +4,13 @@
   base = "."
   environment = { NODE_VERSION = "18" }
 
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_VERSION = "9"
+  # Explicitly indicate this is NOT a Go project
+  GO_IMPORT_PATH = ""
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
-  status = 200 
+  status = 200
