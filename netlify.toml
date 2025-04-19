@@ -2,6 +2,7 @@
   command = "npm install && npm run build"
   publish = "dist"
   base = "."
+  environment = { NODE_VERSION = "18" }
 
 [[redirects]]
   from = "/*"
